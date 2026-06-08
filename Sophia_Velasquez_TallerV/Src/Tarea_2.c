@@ -133,64 +133,64 @@ void init_gpio(void){
 
 	/*Salidas*/
 	/*Puerto A: PA0, PA1, PA4, PA10*/
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;		//Activando la señal de reloj para GPIOA
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;																						//Activando la señal de reloj para GPIOA
 
-	GPIOA->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 | GPIO_MODER_MODE4 | GPIO_MODER_MODE10);				//Limpiando el registro
-	GPIOA->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0 | GPIO_MODER_MODE4_0 | GPIO_MODER_MODE10_0);		//Configurando como salida de proposito general
+	GPIOA->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 | GPIO_MODER_MODE4 | GPIO_MODER_MODE10);								//Limpiando el registro
+	GPIOA->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0 | GPIO_MODER_MODE4_0 | GPIO_MODER_MODE10_0);						//Configurando como salida de proposito general
 
-	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4 | GPIO_OTYPER_OT10);		//Configurando como salida Push-Pull
+	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4 | GPIO_OTYPER_OT10);									//Configurando como salida Push-Pull
 
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED4 | GPIO_OSPEEDR_OSPEED10);				//Limpiando el registro
+	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED4 | GPIO_OSPEEDR_OSPEED10);			//Limpiando el registro
 	GPIOA->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED1_1 | GPIO_OSPEEDR_OSPEED4_1 | GPIO_OSPEEDR_OSPEED10_1);		//Configurando como salida a velocidad alta
 
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPD10);		//Configurando como no Pull-Up/Pull-Down
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD4 | GPIO_PUPDR_PUPD10);								//Configurando como no Pull-Up/Pull-Down
 
-	GPIOA->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD1 | GPIO_ODR_OD4 | GPIO_ODR_OD10);
+	GPIOA->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD1 | GPIO_ODR_OD4 | GPIO_ODR_OD10);												//Comienza encendido
 
 
 	/*Puerto B: PB0, PB10, PB13, PB14, PB15*/
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;		//Activando la señal de reloj para GPIOB
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;																													//Activando la señal de reloj para GPIOB
 
-	GPIOB->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE10 | GPIO_MODER_MODE13 | GPIO_MODER_MODE14 | GPIO_MODER_MODE15);				//Limpiando el registro
-	GPIOB->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE10_0 | GPIO_MODER_MODE13_0 | GPIO_MODER_MODE14_0 | GPIO_MODER_MODE15_0);		//Configurando como salida de proposito general
+	GPIOB->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE10 | GPIO_MODER_MODE13 | GPIO_MODER_MODE14 | GPIO_MODER_MODE15);									//Limpiando el registro
+	GPIOB->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE10_0 | GPIO_MODER_MODE13_0 | GPIO_MODER_MODE14_0 | GPIO_MODER_MODE15_0);							//Configurando como salida de proposito general
 
-	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT10 | GPIO_OTYPER_OT13 | GPIO_OTYPER_OT14 | GPIO_OTYPER_OT15);		//Configurando como salida Push-Pull
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT10 | GPIO_OTYPER_OT13 | GPIO_OTYPER_OT14 | GPIO_OTYPER_OT15);										//Configurando como salida Push-Pull
 
-	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0 | GPIO_OSPEEDR_OSPEED10 | GPIO_OSPEEDR_OSPEED13 | GPIO_OSPEEDR_OSPEED14 | GPIO_OSPEEDER_OSPEEDR15);				//Limpiando el registro
-	GPIOB->OSPEEDR |= (GPIO_OSPEEDER_OSPEEDR0_1 | GPIO_OSPEEDR_OSPEED10_1 | GPIO_OSPEEDR_OSPEED13_1 | GPIO_OSPEEDR_OSPEED14_1 | GPIO_OSPEEDER_OSPEEDR15_1);		//Configurando como salida a velocidad alta
+	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED10 | GPIO_OSPEEDR_OSPEED13 | GPIO_OSPEEDR_OSPEED14 | GPIO_OSPEEDR_OSPEED15);				//Limpiando el registro
+	GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED10_1 | GPIO_OSPEEDR_OSPEED13_1 | GPIO_OSPEEDR_OSPEED14_1 | GPIO_OSPEEDR_OSPEED15_1);		//Configurando como salida a velocidad alta
 
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD10 | GPIO_PUPDR_PUPDR13 | GPIO_PUPDR_PUPDR14 | GPIO_PUPDR_PUPDR15);		//Configurando como no Pull-Up/Pull-Down
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD10 | GPIO_PUPDR_PUPD13 | GPIO_PUPDR_PUPD14 | GPIO_PUPDR_PUPD15);									//Configurando como no Pull-Up/Pull-Down
 
-	GPIOB->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD10 | GPIO_ODR_OD13 | GPIO_ODR_OD14 | GPIO_ODR_OD15);
+	GPIOB->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD10 | GPIO_ODR_OD13 | GPIO_ODR_OD14 | GPIO_ODR_OD15);															//Comienza encendido
 
 
 	/*Puerto C: PC1, PC4*/
 
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;		//Activando la señal de reloj para GPIOC
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;										//Activando la señal de reloj para GPIOC
 
-	GPIOC->MODER &= ~(GPIO_MODER_MODE1 | GPIO_MODER_MODE4);			//Limpiando el registro
-	GPIOC->MODER |= (GPIO_MODER_MODER1_0 | GPIO_MODER_MODE4_0);		//Configurando como salida de proposito general
+	GPIOC->MODER &= ~(GPIO_MODER_MODE1 | GPIO_MODER_MODE4);						//Limpiando el registro
+	GPIOC->MODER |= (GPIO_MODER_MODE1_0 | GPIO_MODER_MODE4_0);					//Configurando como salida de proposito general
 
-	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4);		//Configurando como salida Push-Pull
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4);						//Configurando como salida Push-Pull
 
 	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED4);			//Limpiando el registro
 	GPIOC->OSPEEDR |= (GPIO_OSPEEDR_OSPEED1_1 | GPIO_OSPEEDR_OSPEED4_1);		//Configurando como salida a velocidad alta
 
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR1 | GPIO_PUPDR_PUPD4);		//Configurando como no Pull-Up/Pull-Down
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD4);						//Configurando como no Pull-Up/Pull-Down
 
-	GPIOC->ODR &= ~(GPIO_ODR_OD1 | GPIO_ODR_OD4);
+	GPIOC->ODR &= ~(GPIO_ODR_OD1 | GPIO_ODR_OD4);								//Comienza encendido
 
 
 //	/*Entradas*/
 //	/*PB2 y PC8*/
 //
-//	GPIOB->MODER &= ~(GPIO_MODER_MODER2);		//Configurando PB2 como entrada
+//	GPIOB->MODER &= ~(GPIO_MODER_MODE2);		//Configurando PB2 como entrada
 //
-//	GPIOC->MODER &= ~(GPIO_MODER_MODER8);		//Configurando PC8 como entrada
+//	GPIOC->MODER &= ~(GPIO_MODER_MODE8);		//Configurando PC8 como entrada
 //
-//	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR2);		//Configurando como no Pull-Up/Pull-Down a PB2
+//	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD2);		//Configurando como no Pull-Up/Pull-Down a PB2
 //
-//	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8);		//Configurando como no Pull-Up/Pull-Down a PC8
+//	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD8);		//Configurando como no Pull-Up/Pull-Down a PC8
 
 }
 
