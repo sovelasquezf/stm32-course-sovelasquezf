@@ -24,12 +24,10 @@ typedef enum {
 	NUEVE
 } numero;		//Tipo de variable numero con los numeros del 0 al 9
 
-numero num_a_mostrar = 0;
-
-uint8_t unidades = 0;
-uint8_t decenas = 0;
-uint8_t centenas = 0;
-uint8_t unidades_mil = 0;
+numero unidades = 0;
+numero decenas = 0;
+numero centenas = 0;
+numero unidades_mil = 0;
 
 uint8_t dig1 = 0;
 uint8_t dig2 = 0;
@@ -39,29 +37,28 @@ uint8_t digito = 0;
 
 volatile uint8_t refresco_bandera = 0;
 
-
-
-uint16_t contador = 4372;
+uint16_t contador = 3027;
 
 /*Cabeceras de funciones*/
 volatile void led_ok(void);
 void init_gpio(void);
-void dibujar_numero(uint8_t);
+void dibujar_numero(numero);
 void separar(uint16_t);
 void init_timer3(void);
 void refresco_digitos(void);
-
+void init_exti(void);
 
 int main(void){
 
 	led_ok();
 	init_gpio();
-	dibujar_numero(num_a_mostrar);
-	separar(contador);
 	init_timer3();
 
 
+
 	while(1){
+
+		separar(contador);
 
 		if(refresco_bandera){
 
@@ -126,7 +123,7 @@ volatile void led_ok(void){
 /*Funcion ISR para el TIM2 (led_ok)*/
 void TIM2_IRQHandler(void){
 
-	if(TIM2->SR && TIM_SR_UIF){			//Verifica que si se levante una bandera
+	if(TIM2->SR & TIM_SR_UIF){			//Verifica que si se levante una bandera
 
 		GPIOH->ODR ^= GPIO_ODR_OD1;		//Hace el toogle en el estado del led
 
@@ -190,26 +187,26 @@ void init_gpio(void){
 	GPIOC->ODR &= ~(GPIO_ODR_OD1 | GPIO_ODR_OD4);								//Comienza encendido
 
 
-//	/*Entradas*/
-//	/*PB2 y PC8*/
-//
-//	GPIOB->MODER &= ~(GPIO_MODER_MODE2);		//Configurando PB2 como entrada
-//
-//	GPIOC->MODER &= ~(GPIO_MODER_MODE8);		//Configurando PC8 como entrada
-//
-//	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD2);		//Configurando como no Pull-Up/Pull-Down a PB2
-//
-//	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD8);		//Configurando como no Pull-Up/Pull-Down a PC8
+	/*Entradas*/
+	/*PB2 y PC8*/
+
+	GPIOB->MODER &= ~(GPIO_MODER_MODE2);		//Configurando PB2 como entrada
+
+	GPIOC->MODER &= ~(GPIO_MODER_MODE8);		//Configurando PC8 como entrada
+
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD2);		//Configurando como no Pull-Up/Pull-Down a PB2
+
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD8);		//Configurando como no Pull-Up/Pull-Down a PC8
 
 }
 
 
 /*Apagado y encendido de leds segun el numero a representar*/
-void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transistores PNP al ser un 7 segmentos de anodo comun
+void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transistores PNP al ser un 7 segmentos de anodo comun
 
-	switch(num_a_mostrar){
+	switch(x){
 
-	case 0:
+	case CERO:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -220,7 +217,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 1:
+	case UNO:
 		GPIOA->ODR |= GPIO_ODR_OD4;			//PA4: Led A (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -231,7 +228,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 2:
+	case DOS:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD0;			//PB0: Led C (apagado)
@@ -242,7 +239,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 3:
+	case TRES:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -253,7 +250,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 4:
+	case CUATRO:
 		GPIOA->ODR |= GPIO_ODR_OD4;			//PA4: Led A (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -264,10 +261,10 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 5:
+	case CINCO:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR |= GPIO_ODR_OD0;			//PA0: Led B (apagado)
-		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led C (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
@@ -275,7 +272,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 6:
+	case SEIS:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR |= GPIO_ODR_OD0;			//PA0: Led B (apagado)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -286,7 +283,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 7:
+	case SIETE:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -297,7 +294,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 8:
+	case OCHO:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -308,7 +305,7 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 
 		break;
 
-	case 9:
+	case NUEVE:
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
@@ -366,7 +363,7 @@ void init_timer3(void){
 	TIM3->DIER &= ~(TIM_DIER_UIE);			//Limpieza del registro
 	TIM3->DIER |= TIM_DIER_UIE;				//Configuracion de la interrupcion como Update event
 
-	__NVIC_EnableIRQ(TIM3_IRQn);			//Matriculando la interrupcion del TIM2 en el NVIC
+	__NVIC_EnableIRQ(TIM3_IRQn);			//Matriculando la interrupcion del TIM3 en el NVIC
 
 	TIM3->CR1 &= ~(TIM_CR1_DIR);			//Configurando la direccion del counter como upcounter
 
@@ -381,7 +378,7 @@ void init_timer3(void){
 /*Funcion ISR para el TIM3 (led_ok)*/
 void TIM3_IRQHandler(void){
 
-	if(TIM3->SR && TIM_SR_UIF){			//Verifica que si se levante una bandera
+	if(TIM3->SR & TIM_SR_UIF){			//Verifica que si se levante una bandera
 
 		refresco_bandera = 1;
 
@@ -392,12 +389,19 @@ void TIM3_IRQHandler(void){
 }
 
 
-/**/
+/*Encendido y apagado de digitos segun la tasa de refresco y el numero en el contador*/
 void refresco_digitos(void){
+
+	GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
+	GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
+	GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
+	GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
 
 	switch(digito){
 
 	case 0:
+
+		dibujar_numero(unidades_mil);
 
 		GPIOA->ODR &= ~(GPIO_ODR_OD10);		//PA10: Digito 1 (encendido)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
@@ -410,6 +414,8 @@ void refresco_digitos(void){
 
 	case 1:
 
+		dibujar_numero(centenas);
+
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD4);		//PC4: Digito 2 (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
@@ -421,6 +427,8 @@ void refresco_digitos(void){
 
 	case 2:
 
+		dibujar_numero(decenas);
+
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
 		GPIOB->ODR &= ~(GPIO_ODR_OD10);		//PB10: Digito 3 (encendido)
@@ -431,6 +439,8 @@ void refresco_digitos(void){
 		break;
 
 	case 3:
+
+		dibujar_numero(unidades);
 
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
@@ -452,6 +462,9 @@ void refresco_digitos(void){
 
 
 }
+
+
+
 
 
 
