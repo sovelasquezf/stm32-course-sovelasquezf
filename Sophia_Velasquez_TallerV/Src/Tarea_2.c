@@ -24,15 +24,31 @@ typedef enum {
 	NUEVE
 } numero;		//Tipo de variable numero con los numeros del 0 al 9
 
-numero num_a_mostrar = 10;
+numero num_a_mostrar = 0;
 
+uint8_t unidades = 0;
+uint8_t decenas = 0;
+uint8_t centenas = 0;
+uint8_t unidades_mil = 0;
+
+uint8_t dig1 = 0;
+uint8_t dig2 = 0;
+uint8_t dig3 = 0;
+uint8_t dig4 = 0;
+
+volatile uint8_t refresco_bandera = 0;
+
+
+
+uint16_t contador = 4372;
 
 /*Cabeceras de funciones*/
 volatile void led_ok(void);
 void init_gpio(void);
 void dibujar_numero(uint8_t);
-void timer3(void);
-
+void separar(uint16_t);
+void init_timer3(void);
+void refresco_digitos(void);
 
 
 int main(void){
@@ -40,6 +56,8 @@ int main(void){
 	led_ok();
 	init_gpio();
 	dibujar_numero(num_a_mostrar);
+	separar(contador);
+
 
 	while(1){
 
@@ -176,6 +194,7 @@ void init_gpio(void){
 
 }
 
+
 /*Apagado y encendido de leds segun el numero a representar*/
 void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transistores PNP al ser un 7 segmentos de anodo comun
 
@@ -305,6 +324,66 @@ void dibujar_numero(uint8_t){				//Se usa logica inversa por el uso de transisto
 	}
 
 }
+
+
+/*Separacion del contador en digitos separados*/
+void separar(uint16_t x){
+
+	unidades_mil = x / 1000;
+
+	centenas = (x % 1000) / 100;
+
+	decenas = (x % 100) / 10;
+
+	unidades = (x % 10);
+
+}
+
+
+/*Configuracion del TIM3 a 7 ms*/
+void init_timer3(void){
+
+	/*Configuracion del TIM3*/
+	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;		//Activando la señal de reloj para el TIM3
+
+	TIM3->PSC = 16000 - 1;					//Configurando el Prescale a 10 Hz o 1 ms
+
+	TIM3->ARR = 7 - 1;						//Configurando el auto-load a 7 ms
+
+	TIM3->CNT = 0;							//Reiniciando el contador
+
+	TIM3->SR &= ~(TIM_SR_UIF);				//Limpieza de la bandera de interrupcion
+
+	TIM3->DIER &= ~(TIM_DIER_UIE);			//Limpieza del registro
+	TIM3->DIER |= TIM_DIER_UIE;				//Configuracion de la interrupcion como Update event
+
+	__NVIC_EnableIRQ(TIM3_IRQn);			//Matriculando la interrupcion del TIM2 en el NVIC
+
+	TIM3->CR1 &= ~(TIM_CR1_DIR);			//Configurando la direccion del counter como upcounter
+
+	TIM3->CR1 &= ~(TIM_CR1_ARPE);			//Limpiando el registro
+	TIM3->CR1 |= TIM_CR1_ARPE;				//Activando la precarga del ARR
+
+	TIM3->CR1 |= TIM_CR1_CEN;				//Activacion del contador
+
+}
+
+
+/*Funcion ISR para el TIM3 (led_ok)*/
+void TIM3_IRQHandler(void){
+
+	if(TIM3->SR && TIM_SR_UIF){			//Verifica que si se levante una bandera
+
+		refresco_bandera = 1;
+
+		TIM3->SR &= ~(TIM_SR_UIF);		//Limpieza del bit (baja la bandera)
+
+	}
+
+}
+
+
+/**/
 
 
 
