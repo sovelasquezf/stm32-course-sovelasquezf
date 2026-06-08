@@ -35,6 +35,7 @@ uint8_t dig1 = 0;
 uint8_t dig2 = 0;
 uint8_t dig3 = 0;
 uint8_t dig4 = 0;
+uint8_t digito = 0;
 
 volatile uint8_t refresco_bandera = 0;
 
@@ -57,9 +58,17 @@ int main(void){
 	init_gpio();
 	dibujar_numero(num_a_mostrar);
 	separar(contador);
+	init_timer3();
 
 
 	while(1){
+
+		if(refresco_bandera){
+
+			refresco_digitos();
+
+			refresco_bandera = 0;
+		}
 
 	}
 
@@ -348,7 +357,7 @@ void init_timer3(void){
 
 	TIM3->PSC = 16000 - 1;					//Configurando el Prescale a 10 Hz o 1 ms
 
-	TIM3->ARR = 7 - 1;						//Configurando el auto-load a 7 ms
+	TIM3->ARR = 1500 - 1;						//Configurando el auto-load a 7 ms
 
 	TIM3->CNT = 0;							//Reiniciando el contador
 
@@ -384,7 +393,65 @@ void TIM3_IRQHandler(void){
 
 
 /**/
+void refresco_digitos(void){
 
+	switch(digito){
+
+	case 0:
+
+		GPIOA->ODR &= ~(GPIO_ODR_OD10);		//PA10: Digito 1 (encendido)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+
+		digito++;
+
+		break;
+
+	case 1:
+
+		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
+		GPIOC->ODR &= ~(GPIO_ODR_OD4);		//PC4: Digito 2 (encendido)
+		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+
+		digito++;
+
+		break;
+
+	case 2:
+
+		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
+		GPIOB->ODR &= ~(GPIO_ODR_OD10);		//PB10: Digito 3 (encendido)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+
+		digito++;
+
+		break;
+
+	case 3:
+
+		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Digito 4 (encendido)
+
+		digito = 0;
+
+		break;
+
+	default:
+
+		digito = 0;
+
+		break;
+
+
+	}
+
+
+}
 
 
 
