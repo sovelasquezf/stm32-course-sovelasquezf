@@ -37,7 +37,10 @@ uint8_t digito = 0;
 
 volatile uint8_t refresco_bandera = 0;
 
-uint16_t contador = 3027;
+uint16_t contador = 0;
+
+volatile uint8_t incremento_bandera = 0;
+volatile uint8_t decremento_bandera = 0;
 
 /*Cabeceras de funciones*/
 volatile void led_ok(void);
@@ -53,19 +56,43 @@ int main(void){
 	led_ok();
 	init_gpio();
 	init_timer3();
-
+	init_exti();
 
 
 	while(1){
 
+		/*Separacion del contador actual*/
 		separar(contador);
 
+
+		/*Incremento del contador*/
+		if(incremento_bandera){
+
+			contador++;
+
+			incremento_bandera = 0;
+
+		}
+
+
+		/*Decremento del contador*/
+		if(decremento_bandera){
+
+			contador--;
+
+			decremento_bandera = 0;
+
+		}
+
+
+		/*Refresco de los digitos con el valor del contador*/
 		if(refresco_bandera){
 
 			refresco_digitos();
 
 			refresco_bandera = 0;
 		}
+
 
 	}
 
@@ -335,7 +362,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 /*Separacion del contador en digitos separados*/
 void separar(uint16_t x){
 
-	unidades_mil = x / 1000;
+	unidades_mil = (x / 1000) % 10;
 
 	centenas = (x % 1000) / 100;
 
@@ -346,7 +373,7 @@ void separar(uint16_t x){
 }
 
 
-/*Configuracion del TIM3 a 7 ms*/
+/*Configuracion del TIM3 a 6 ms*/
 void init_timer3(void){
 
 	/*Configuracion del TIM3*/
@@ -354,7 +381,7 @@ void init_timer3(void){
 
 	TIM3->PSC = 16000 - 1;					//Configurando el Prescale a 10 Hz o 1 ms
 
-	TIM3->ARR = 1500 - 1;						//Configurando el auto-load a 7 ms
+	TIM3->ARR = 6 - 1;						//Configurando el auto-load a 6 ms
 
 	TIM3->CNT = 0;							//Reiniciando el contador
 
@@ -375,7 +402,7 @@ void init_timer3(void){
 }
 
 
-/*Funcion ISR para el TIM3 (led_ok)*/
+/*Funcion ISR para el TIM3 (tasa de refresco)*/
 void TIM3_IRQHandler(void){
 
 	if(TIM3->SR & TIM_SR_UIF){			//Verifica que si se levante una bandera
@@ -464,7 +491,62 @@ void refresco_digitos(void){
 }
 
 
+/*Configuracion de las EXTI2 y EXTI8*/
+void init_exti(void){
+	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;				//Encendiendo señal de reloj para el SYSCFG
 
+	/*EXTI2 para PB2*/
+	SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI2);		//Limpiando el registro del MUX
+	SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PB;		//Configurando el EXTI para el puerto B (PB2)
+
+	EXTI->RTSR |= EXTI_RTSR_TR2;						//Configurando para detectar flancos de subida (cuando entra la interrupcion)
+
+	__NVIC_EnableIRQ(EXTI2_IRQn);						//Registro de la interrupcion en el NVIC
+
+	EXTI->PR |= EXTI_PR_PR2;							//Limpiando la bandera relacionada al EXTI2
+
+	EXTI->IMR |= EXTI_IMR_IM2;							//Activacion de la interrupcion
+
+
+	/*EXTI8 para PC8*/
+	SYSCFG->EXTICR[2] &= ~(SYSCFG_EXTICR3_EXTI8);		//Limpiando el registro del MUX
+	SYSCFG->EXTICR[2] |= SYSCFG_EXTICR3_EXTI8_PC;		//Configurando el EXTI para el puerto C (PC8)
+
+	EXTI->FTSR |= EXTI_FTSR_TR8;						//Configurando para detectar flancos de bajada (cuando sale la interrupcion)
+
+	__NVIC_EnableIRQ(EXTI9_5_IRQn);						//Registro de la interrupcion en el NVIC
+
+	EXTI->PR |= EXTI_PR_PR8;							//Limpiando la bandera relacionada al EXTI8
+
+	EXTI->IMR |= EXTI_IMR_IM8;							//Activacion de la interrupcion
+
+}
+
+
+/*Funcion ISR para el EXTI2 (incremento de contador)*/
+void EXTI2_IRQHandler(void){
+	if(EXTI->PR & EXTI_PR_PR2){
+
+		EXTI->PR |= EXTI_PR_PR2;		//Limpiando la bandera relacionada al EXTI2
+
+		incremento_bandera = 1;
+
+	}
+
+}
+
+
+/*Funcion ISR para el EXTI8 (incremento de contador)*/
+void EXTI9_5_IRQHandler(void){
+	if(EXTI->PR & EXTI_PR_PR8){
+
+		EXTI->PR |= EXTI_PR_PR8;		//Limpiando la bandera relacionada al EXTI8
+
+		decremento_bandera = 1;
+
+	}
+
+}
 
 
 
