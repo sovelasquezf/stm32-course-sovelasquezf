@@ -24,20 +24,20 @@ typedef enum {
 	NUEVE
 } numero;		//Tipo de variable numero con los numeros del 0 al 9
 
-numero unidades = 0;
-numero decenas = 0;
-numero centenas = 0;
-numero unidades_mil = 0;
+uint8_t unidades = 0;
+uint8_t decenas = 0;
+uint8_t centenas = 0;
+uint8_t unidades_mil = 0;
 
 uint8_t dig1 = 0;
 uint8_t dig2 = 0;
 uint8_t dig3 = 0;
 uint8_t dig4 = 0;
-uint8_t digito = 0;
+volatile uint8_t digito = 0;
 
 volatile uint8_t refresco_bandera = 0;
 
-uint16_t contador = 0;
+volatile uint16_t contador = 0;
 
 volatile uint8_t incremento_bandera = 0;
 volatile uint8_t decremento_bandera = 0;
@@ -428,7 +428,7 @@ void refresco_digitos(void){
 
 	case 0:
 
-		dibujar_numero(unidades_mil);
+		dibujar_numero((numero)unidades_mil);
 
 		GPIOA->ODR &= ~(GPIO_ODR_OD10);		//PA10: Digito 1 (encendido)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
@@ -441,7 +441,7 @@ void refresco_digitos(void){
 
 	case 1:
 
-		dibujar_numero(centenas);
+		dibujar_numero((numero)centenas);
 
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD4);		//PC4: Digito 2 (encendido)
@@ -454,7 +454,7 @@ void refresco_digitos(void){
 
 	case 2:
 
-		dibujar_numero(decenas);
+		dibujar_numero((numero)decenas);
 
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
@@ -467,7 +467,7 @@ void refresco_digitos(void){
 
 	case 3:
 
-		dibujar_numero(unidades);
+		dibujar_numero((numero)unidades);
 
 		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
@@ -484,9 +484,7 @@ void refresco_digitos(void){
 
 		break;
 
-
 	}
-
 
 }
 
@@ -501,11 +499,11 @@ void init_exti(void){
 
 	EXTI->RTSR |= EXTI_RTSR_TR2;						//Configurando para detectar flancos de subida (cuando entra la interrupcion)
 
-	__NVIC_EnableIRQ(EXTI2_IRQn);						//Registro de la interrupcion en el NVIC
+	EXTI->IMR |= EXTI_IMR_IM2;							//Activacion de la interrupcion
 
 	EXTI->PR |= EXTI_PR_PR2;							//Limpiando la bandera relacionada al EXTI2
 
-	EXTI->IMR |= EXTI_IMR_IM2;							//Activacion de la interrupcion
+	__NVIC_EnableIRQ(EXTI2_IRQn);						//Registro de la interrupcion en el NVIC
 
 
 	/*EXTI8 para PC8*/
@@ -514,11 +512,11 @@ void init_exti(void){
 
 	EXTI->FTSR |= EXTI_FTSR_TR8;						//Configurando para detectar flancos de bajada (cuando sale la interrupcion)
 
-	__NVIC_EnableIRQ(EXTI9_5_IRQn);						//Registro de la interrupcion en el NVIC
+	EXTI->IMR |= EXTI_IMR_IM8;							//Activacion de la interrupcion
 
 	EXTI->PR |= EXTI_PR_PR8;							//Limpiando la bandera relacionada al EXTI8
 
-	EXTI->IMR |= EXTI_IMR_IM8;							//Activacion de la interrupcion
+	__NVIC_EnableIRQ(EXTI9_5_IRQn);						//Registro de la interrupcion en el NVIC
 
 }
 
