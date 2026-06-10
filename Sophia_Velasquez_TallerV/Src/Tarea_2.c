@@ -29,10 +29,6 @@ uint8_t decenas = 0;
 uint8_t centenas = 0;
 uint8_t unidades_mil = 0;
 
-uint8_t dig1 = 0;
-uint8_t dig2 = 0;
-uint8_t dig3 = 0;
-uint8_t dig4 = 0;
 volatile uint8_t digito = 0;
 
 volatile uint8_t refresco_bandera = 0;
@@ -165,36 +161,36 @@ void TIM2_IRQHandler(void){
 void init_gpio(void){
 
 	/*Salidas*/
-	/*Puerto A: PA0, PA1, PA4, PA10*/
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;																						//Activando la señal de reloj para GPIOA
+	/*Puerto A: PA0, PA1, PA4*/
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;																//Activando la señal de reloj para GPIOA
 
-	GPIOA->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 | GPIO_MODER_MODE4 | GPIO_MODER_MODE10);								//Limpiando el registro
-	GPIOA->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0 | GPIO_MODER_MODE4_0 | GPIO_MODER_MODE10_0);						//Configurando como salida de proposito general
+	GPIOA->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 | GPIO_MODER_MODE4 );							//Limpiando el registro
+	GPIOA->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0 | GPIO_MODER_MODE4_0);						//Configurando como salida de proposito general
 
-	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4 | GPIO_OTYPER_OT10);									//Configurando como salida Push-Pull
+	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT4);							//Configurando como salida Push-Pull
 
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED4 | GPIO_OSPEEDR_OSPEED10);			//Limpiando el registro
-	GPIOA->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED1_1 | GPIO_OSPEEDR_OSPEED4_1 | GPIO_OSPEEDR_OSPEED10_1);		//Configurando como salida a velocidad alta
+	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED4);			//Limpiando el registro
+	GPIOA->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED1_1 | GPIO_OSPEEDR_OSPEED4_1);		//Configurando como salida a velocidad alta
 
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD4 | GPIO_PUPDR_PUPD10);								//Configurando como no Pull-Up/Pull-Down
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD4);							//Configurando como no Pull-Up/Pull-Down
 
-	GPIOA->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD1 | GPIO_ODR_OD4 | GPIO_ODR_OD10);												//Comienza encendido
+	GPIOA->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD1 | GPIO_ODR_OD4);										//Comienza encendido
 
 
-	/*Puerto B: PB0, PB10, PB13, PB14, PB15*/
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;																													//Activando la señal de reloj para GPIOB
+	/*Puerto B: PB0, PB1, PB2, PB13, PB14, PB15*/
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;																																			//Activando la señal de reloj para GPIOB
 
-	GPIOB->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE10 | GPIO_MODER_MODE13 | GPIO_MODER_MODE14 | GPIO_MODER_MODE15);									//Limpiando el registro
-	GPIOB->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE10_0 | GPIO_MODER_MODE13_0 | GPIO_MODER_MODE14_0 | GPIO_MODER_MODE15_0);							//Configurando como salida de proposito general
+	GPIOB->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 | GPIO_MODER_MODE2 | GPIO_MODER_MODE13 | GPIO_MODER_MODE14 | GPIO_MODER_MODE15);											//Limpiando el registro
+	GPIOB->MODER |= (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0 | GPIO_MODER_MODE2_0 | GPIO_MODER_MODE13_0 | GPIO_MODER_MODE14_0 | GPIO_MODER_MODE15_0);								//Configurando como salida de proposito general
 
-	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT10 | GPIO_OTYPER_OT13 | GPIO_OTYPER_OT14 | GPIO_OTYPER_OT15);										//Configurando como salida Push-Pull
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1 | GPIO_OTYPER_OT2 | GPIO_OTYPER_OT13 | GPIO_OTYPER_OT14 | GPIO_OTYPER_OT15);												//Configurando como salida Push-Pull
 
-	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED10 | GPIO_OSPEEDR_OSPEED13 | GPIO_OSPEEDR_OSPEED14 | GPIO_OSPEEDR_OSPEED15);				//Limpiando el registro
-	GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED10_1 | GPIO_OSPEEDR_OSPEED13_1 | GPIO_OSPEEDR_OSPEED14_1 | GPIO_OSPEEDR_OSPEED15_1);		//Configurando como salida a velocidad alta
+	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1 | GPIO_OSPEEDR_OSPEED2 | GPIO_OSPEEDR_OSPEED13 | GPIO_OSPEEDR_OSPEED14 | GPIO_OSPEEDR_OSPEED15);				//Limpiando el registro
+	GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED0_1 | GPIO_OSPEEDR_OSPEED1_1 | GPIO_OSPEEDR_OSPEED2_1 | GPIO_OSPEEDR_OSPEED13_1 | GPIO_OSPEEDR_OSPEED14_1 | GPIO_OSPEEDR_OSPEED15_1);		//Configurando como salida a velocidad alta
 
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD10 | GPIO_PUPDR_PUPD13 | GPIO_PUPDR_PUPD14 | GPIO_PUPDR_PUPD15);									//Configurando como no Pull-Up/Pull-Down
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 | GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD13 | GPIO_PUPDR_PUPD14 | GPIO_PUPDR_PUPD15);											//Configurando como no Pull-Up/Pull-Down
 
-	GPIOB->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD10 | GPIO_ODR_OD13 | GPIO_ODR_OD14 | GPIO_ODR_OD15);															//Comienza encendido
+	GPIOB->ODR &= ~(GPIO_ODR_OD0 | GPIO_ODR_OD1 | GPIO_ODR_OD2 | GPIO_ODR_OD13 | GPIO_ODR_OD14 | GPIO_ODR_OD15);																	//Comienza encendido
 
 
 	/*Puerto C: PC1, PC4*/
@@ -215,15 +211,15 @@ void init_gpio(void){
 
 
 	/*Entradas*/
-	/*PB2 y PC8*/
+	/*PA9 y PB12*/
 
-	GPIOB->MODER &= ~(GPIO_MODER_MODE2);		//Configurando PB2 como entrada
+	GPIOA->MODER &= ~(GPIO_MODER_MODE9);		//Configurando PA9 como entrada
 
-	GPIOC->MODER &= ~(GPIO_MODER_MODE8);		//Configurando PC8 como entrada
+	GPIOB->MODER &= ~(GPIO_MODER_MODE12);		//Configurando PB12 como entrada
 
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD2);		//Configurando como no Pull-Up/Pull-Down a PB2
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD9);		//Configurando como no Pull-Up/Pull-Down a PA9
 
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD8);		//Configurando como no Pull-Up/Pull-Down a PC8
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD12);		//Configurando como no Pull-Up/Pull-Down a PB12
 
 }
 
@@ -237,7 +233,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD14);		//PB14: Led E (encendido)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR |= GPIO_ODR_OD1;			//PA1: Led G (apagado)
@@ -248,7 +244,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR |= GPIO_ODR_OD4;			//PA4: Led A (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Led D (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Led D (apagado)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD1;			//PC1: Led F (apagado)
 		GPIOA->ODR |= GPIO_ODR_OD1;			//PA1: Led G (apagado)
@@ -259,7 +255,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD0;			//PB0: Led C (apagado)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD14);		//PB14: Led E (encendido)
 		GPIOC->ODR |= GPIO_ODR_OD1;			//PC1: Led F (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -270,7 +266,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD1;			//PC1: Led F (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -281,7 +277,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR |= GPIO_ODR_OD4;			//PA4: Led A (apagado)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Led D (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Led D (apagado)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -292,7 +288,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR |= GPIO_ODR_OD0;			//PA0: Led B (apagado)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -303,7 +299,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR |= GPIO_ODR_OD0;			//PA0: Led B (apagado)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD14);		//PB14: Led E (encendido)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -314,7 +310,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Led D (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Led D (apagado)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD1;			//PC1: Led F (apagado)
 		GPIOA->ODR |= GPIO_ODR_OD1;			//PA1: Led G (apagado)
@@ -325,7 +321,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD14);		//PB14: Led E (encendido)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -336,7 +332,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR &= ~(GPIO_ODR_OD4);		//PA4: Led A (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD0);		//PA0: Led B (encendido)
 		GPIOB->ODR &= ~(GPIO_ODR_OD0);		//PB0: Led C (encendido)
-		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Led D (encendido)
+		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Led D (encendido)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR &= ~(GPIO_ODR_OD1);		//PC1: Led F (encendido)
 		GPIOA->ODR &= ~(GPIO_ODR_OD1);		//PA1: Led G (encendido)
@@ -347,7 +343,7 @@ void dibujar_numero(numero x){				//Se usa logica inversa por el uso de transist
 		GPIOA->ODR |= GPIO_ODR_OD4;			//PA4: Led A (apagado)
 		GPIOA->ODR |= GPIO_ODR_OD0;			//PA0: Led B (apagado)
 		GPIOB->ODR |= GPIO_ODR_OD0;			//PB0: Led C (apagado)
-		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Led D (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Led D (apagado)
 		GPIOB->ODR |= GPIO_ODR_OD14;		//PB14: Led E (apagado)
 		GPIOC->ODR |= GPIO_ODR_OD1;			//PC1: Led F (apagado)
 		GPIOA->ODR |= GPIO_ODR_OD1;			//PA1: Led G (apagado)
@@ -419,10 +415,10 @@ void TIM3_IRQHandler(void){
 /*Encendido y apagado de digitos segun la tasa de refresco y el numero en el contador*/
 void refresco_digitos(void){
 
-	GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
-	GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
-	GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
-	GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+	GPIOB->ODR |= GPIO_ODR_OD1;			//PB1: Digito 1 (apagado)
+	GPIOB->ODR |= GPIO_ODR_OD2;			//PB2: Digito 2 (apagado)
+	GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 3 (apagado)
+	GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Digito 4 (apagado)
 
 	switch(digito){
 
@@ -430,10 +426,10 @@ void refresco_digitos(void){
 
 		dibujar_numero((numero)unidades_mil);
 
-		GPIOA->ODR &= ~(GPIO_ODR_OD10);		//PA10: Digito 1 (encendido)
-		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
-		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
-		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+		GPIOB->ODR &= ~(GPIO_ODR_OD1);		//PB1: Digito 1 (encendido)
+		GPIOB->ODR |= GPIO_ODR_OD2;			//PB2: Digito 2 (apagado)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 3 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Digito 4 (apagado)
 
 		digito++;
 
@@ -443,10 +439,10 @@ void refresco_digitos(void){
 
 		dibujar_numero((numero)centenas);
 
-		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
-		GPIOC->ODR &= ~(GPIO_ODR_OD4);		//PC4: Digito 2 (encendido)
-		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
-		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD1;			//PB1: Digito 1 (apagado)
+		GPIOB->ODR &= ~(GPIO_ODR_OD2);		//PB2: Digito 2 (encendido)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PBC4: Digito 3 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Digito 4 (apagado)
 
 		digito++;
 
@@ -456,10 +452,10 @@ void refresco_digitos(void){
 
 		dibujar_numero((numero)decenas);
 
-		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
-		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
-		GPIOB->ODR &= ~(GPIO_ODR_OD10);		//PB10: Digito 3 (encendido)
-		GPIOB->ODR |= GPIO_ODR_OD15;		//PB15: Digito 4 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD1;			//PB1: Digito 1 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD2;			//PB2: Digito 2 (apagado)
+		GPIOC->ODR &= ~(GPIO_ODR_OD4);		//PC4: Digito 3 (encendido)
+		GPIOB->ODR |= GPIO_ODR_OD13;		//PB13: Digito 4 (apagado)
 
 		digito++;
 
@@ -469,10 +465,10 @@ void refresco_digitos(void){
 
 		dibujar_numero((numero)unidades);
 
-		GPIOA->ODR |= GPIO_ODR_OD10;		//PA10: Digito 1 (apagado)
-		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 2 (apagado)
-		GPIOB->ODR |= GPIO_ODR_OD10;		//PB10: Digito 3 (apagado)
-		GPIOB->ODR &= ~(GPIO_ODR_OD15);		//PB15: Digito 4 (encendido)
+		GPIOB->ODR |= GPIO_ODR_OD1;			//PB1: Digito 1 (apagado)
+		GPIOB->ODR |= GPIO_ODR_OD2;			//PB2: Digito 2 (apagado)
+		GPIOC->ODR |= GPIO_ODR_OD4;			//PC4: Digito 3 (apagado)
+		GPIOB->ODR &= ~(GPIO_ODR_OD13);		//PB13: Digito 4 (encendido)
 
 		digito = 0;
 
@@ -489,43 +485,44 @@ void refresco_digitos(void){
 }
 
 
-/*Configuracion de las EXTI2 y EXTI8*/
+/*Configuracion de las EXTI9 y EXTI12*/
 void init_exti(void){
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;				//Encendiendo señal de reloj para el SYSCFG
 
-	/*EXTI2 para PB2*/
-	SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI2);		//Limpiando el registro del MUX
-	SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PB;		//Configurando el EXTI para el puerto B (PB2)
 
-	EXTI->RTSR |= EXTI_RTSR_TR2;						//Configurando para detectar flancos de subida (cuando entra la interrupcion)
+	/*EXTI9 para PA9*/
+	SYSCFG->EXTICR[2] &= ~(SYSCFG_EXTICR3_EXTI9);		//Limpiando el registro del MUX
+	SYSCFG->EXTICR[2] |= SYSCFG_EXTICR3_EXTI9_PA;		//Configurando el EXTI para el puerto A (PA9)
 
-	EXTI->IMR |= EXTI_IMR_IM2;							//Activacion de la interrupcion
+	EXTI->RTSR |= EXTI_RTSR_TR9;						//Configurando para detectar flancos de subida (cuando entra la interrupcion)
 
-	EXTI->PR |= EXTI_PR_PR2;							//Limpiando la bandera relacionada al EXTI2
+	EXTI->IMR |= EXTI_IMR_IM9;							//Activacion de la interrupcion
 
-	__NVIC_EnableIRQ(EXTI2_IRQn);						//Registro de la interrupcion en el NVIC
-
-
-	/*EXTI8 para PC8*/
-	SYSCFG->EXTICR[2] &= ~(SYSCFG_EXTICR3_EXTI8);		//Limpiando el registro del MUX
-	SYSCFG->EXTICR[2] |= SYSCFG_EXTICR3_EXTI8_PC;		//Configurando el EXTI para el puerto C (PC8)
-
-	EXTI->FTSR |= EXTI_FTSR_TR8;						//Configurando para detectar flancos de bajada (cuando sale la interrupcion)
-
-	EXTI->IMR |= EXTI_IMR_IM8;							//Activacion de la interrupcion
-
-	EXTI->PR |= EXTI_PR_PR8;							//Limpiando la bandera relacionada al EXTI8
+	EXTI->PR |= EXTI_PR_PR9;							//Limpiando la bandera relacionada al EXTI9
 
 	__NVIC_EnableIRQ(EXTI9_5_IRQn);						//Registro de la interrupcion en el NVIC
+
+
+	/*EXTI2 para PB12*/
+	SYSCFG->EXTICR[3] &= ~(SYSCFG_EXTICR4_EXTI12);		//Limpiando el registro del MUX
+	SYSCFG->EXTICR[3] |= SYSCFG_EXTICR4_EXTI12_PB;		//Configurando el EXTI para el puerto B (PB12)
+
+	EXTI->FTSR |= EXTI_FTSR_TR12;						//Configurando para detectar flancos de bajada (cuando sale la interrupcion)
+
+	EXTI->IMR |= EXTI_IMR_IM12;							//Activacion de la interrupcion
+
+	EXTI->PR |= EXTI_PR_PR12;							//Limpiando la bandera relacionada al EXTI12
+
+	__NVIC_EnableIRQ(EXTI15_10_IRQn);					//Registro de la interrupcion en el NVIC
 
 }
 
 
-/*Funcion ISR para el EXTI2 (incremento de contador)*/
-void EXTI2_IRQHandler(void){
-	if(EXTI->PR & EXTI_PR_PR2){
+/*Funcion ISR para el EXTI9 (incremento de contador)*/
+void EXTI9_5_IRQHandler(void){
+	if(EXTI->PR & EXTI_PR_PR9){
 
-		EXTI->PR |= EXTI_PR_PR2;		//Limpiando la bandera relacionada al EXTI2
+		EXTI->PR |= EXTI_PR_PR9;		//Limpiando la bandera relacionada al EXTI9
 
 		incremento_bandera = 1;
 
@@ -534,11 +531,11 @@ void EXTI2_IRQHandler(void){
 }
 
 
-/*Funcion ISR para el EXTI8 (incremento de contador)*/
-void EXTI9_5_IRQHandler(void){
-	if(EXTI->PR & EXTI_PR_PR8){
+/*Funcion ISR para el EXTI12 (incremento de contador)*/
+void EXTI15_10_IRQHandler(void){
+	if(EXTI->PR & EXTI_PR_PR12){
 
-		EXTI->PR |= EXTI_PR_PR8;		//Limpiando la bandera relacionada al EXTI8
+		EXTI->PR |= EXTI_PR_PR12;		//Limpiando la bandera relacionada al EXTI12
 
 		decremento_bandera = 1;
 
