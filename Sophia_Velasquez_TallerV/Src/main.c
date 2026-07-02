@@ -1,74 +1,125 @@
-/**
- ******************************************************************************
- * @file           : main.c
- * @author         : Sophia Alejandra Velasquez Fuentes
- * @brief          : Main program body
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2026 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
+/*
+ * main.c
+ * HAL Blinky — LED en PA5 conmutado cada 250 ms por TIM3
+ * Autor: Sophia Alejandra Velasquez Fuentes
  */
 
-#include <stdint.h>
+#include "stm32f4xx_hal.h"
 
+/* Handle de TIM3 — debe ser global para que stm32f4xx_it.c pueda accederlo */
+TIM_HandleTypeDef htim3;
 
-//#if !defined(__SOFT_FP__) && defined(__ARM_FP)
-//  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
-//#endif
+/* Prototipos de funciones privadas */
+static void SystemClock_Config(void);
+static void gpio_Init(void);
+static void tim3_Init(void);
 
-
-/*Definicion de variables del sistema*/
-uint8_t dummy_8bit = 0;
-uint16_t dummy_16bit = 0;
-uint32_t dummy_32bit = 0;
-
-uint16_t dummy_16bit_dec = 0;
-uint16_t dummy_16bit_hex = 0;
-uint16_t dummy_16bit_bin = 0;
-
-uint8_t overflow_demo = 0;
-
-
-/*Funcion main*/
 int main(void)
 {
-	dummy_8bit = 123;
-	dummy_16bit = 4986;
-	dummy_32bit = 12345678;
+    HAL_Init();           /* inicializa HAL: SysTick, caché, agrupación de prioridades */
+    SystemClock_Config(); /* configura el árbol de relojes: HSI a 16 MHz               */
+    gpio_Init();          /* configura PA5 como salida push-pull                        */
+    tim3_Init();          /* configura TIM3: evento de actualización cada 250 ms        */
 
-	dummy_16bit_dec = 32;
-	dummy_16bit_dec = 0x20;
-	dummy_16bit_bin = 0b100000;
-
-	/*Cargando el valor xxxx en la variable yyyy*/
-	dummy_16bit_bin = dummy_16bit_bin << 4;
-	dummy_16bit_bin = dummy_16bit_bin >> 5;
-
-	/*Exponiendo el caso de un overflow*/
-
-	dummy_8bit = 255;
-	dummy_16bit = 255;
-	dummy_32bit = 255;
-
-	/*Incremento el valor de la variable dummy_8bit en 1 y lo cargo en la variable * overflow_demo * */
-	overflow_demo = dummy_8bit + 1;
-	overflow_demo = overflow_demo + 1;
-
-//	overflow_demo = 735;
-
-	/*Loop forever*/
-	while(1){
-
-	}
-
-	return 0;
+    while (1)
+    {
+        /* bucle de aplicación — la conmutación del LED ocurre en el callback */
+    }
 }
 
+/*
+ * SystemClock_Config
+ * Usa el oscilador interno HSI a 16 MHz
+ * Sin PLL — configuración de reloj más simple posible
+ */
+static void SystemClock_Config(void)
+{
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+    /* HSI ya está encendido al resetear — confirmar y usarlo */
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_NONE;
+    HAL_RCC_OscConfig(&RCC_OscInitStruct);
+
+    /* Seleccionar HSI como SYSCLK — todos los divisores de bus en 1 */
+    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK |
+                                       RCC_CLOCKTYPE_HCLK   |
+                                       RCC_CLOCKTYPE_PCLK1  |
+                                       RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_HSI;
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;   /* HCLK  = 16 MHz */
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;     /* APB1  = 16 MHz */
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;     /* APB2  = 16 MHz */
+
+    /* FLASH_LATENCY_0 = cero wait states, correcto para 16 MHz */
+    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0);
+}
+
+/*
+ * gpio_Init
+ * Configura PA5 como salida push-pull — LED de la tarjeta Nucleo
+ */
+static void gpio_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* Habilitar reloj de GPIOA en el bus AHB1
+       Equivalente bare-metal: RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    /* Configurar PA5 */
+    GPIO_InitStruct.Pin   = GPIO_PIN_5;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+/*
+ * tim3_Init
+ * Configura TIM3 para generar un evento de actualización cada 250 ms
+ *
+ * Cadena de reloj:
+ *   HSI (16 MHz) → APB1 (16 MHz) → reloj TIM3 (16 MHz)
+ *
+ * PSC = 15999  →  tick = 16,000,000 / (15999 + 1) = 1,000 Hz  (1 ms por tick)
+ * ARR = 249    →  período = (249 + 1) x 1 ms = 250 ms
+ */
+static void tim3_Init(void)
+{
+    /* Habilitar reloj de TIM3 en el bus APB1 */
+    __HAL_RCC_TIM3_CLK_ENABLE();
+
+    /* Configurar la base de TIM3 */
+    htim3.Instance               = TIM3;
+    htim3.Init.Prescaler         = 15999;
+    htim3.Init.CounterMode       = TIM_COUNTERMODE_UP;
+    htim3.Init.Period            = 249;
+    htim3.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+    htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+
+    HAL_TIM_Base_Init(&htim3);
+
+    /* Arrancar TIM3 en modo interrupción — habilita la interrupción de evento de actualización */
+    HAL_TIM_Base_Start_IT(&htim3);
+
+    /* Habilitar la línea de interrupción de TIM3 en el NVIC */
+    HAL_NVIC_EnableIRQ(TIM3_IRQn);
+}
+
+/*
+ * HAL_TIM_PeriodElapsedCallback
+ * Llamado automáticamente por HAL_TIM_IRQHandler() cada vez que un evento
+ * de actualización del timer se dispara. Es compartido por todos los timers
+ * — siempre verifica htim->Instance.
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM3)
+    {
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+    }
+}
