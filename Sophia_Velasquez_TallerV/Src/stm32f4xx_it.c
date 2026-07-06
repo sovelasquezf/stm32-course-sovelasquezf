@@ -1,7 +1,8 @@
 /*
  * stm32f4xx_it.c
  * Rutinas de servicio de interrupción
- * Autor: Sophia Alejandra Velasquez Fuentes
+ * Autor: Sophia Alejandra Velasquez Fuentes - sovelasquezf@unal.edu.co
+ *
  */
 
 #include "stm32f4xx_hal.h"
