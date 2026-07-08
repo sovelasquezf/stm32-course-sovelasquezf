@@ -12,12 +12,12 @@
  *  	CH3 -> PA10: Color Rojo
  *  	CH4 -> PA11: Color Azul
  *
- *  - TIM2 - AF01
- *    (Encoder - Verde)
+ *  - TIM2
+ *    (Encoder - Verde) - AF01
  *  	CH1 -> PA0: DT
  *  	CH2 -> PA1: CLK
  *
- *    (Comunicación Serial - Rojo)
+ *    (Comunicación Serial - Rojo) - AF07
  *  	CH3 -> PA2: USART2_TX (Transmisión)
  *  	CH4 -> PA3: USART2_RX (Recepción)
  *
@@ -46,11 +46,11 @@ TIM_HandleTypeDef htim4;			//TIM4 handle debe ser global para que stm32f4xx_it.c
 
 ADC_HandleTypeDef hadc1 = {0};		//ADC1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
-USART_HandleTypeDef husart2 = {0};	//USART2 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+UART_HandleTypeDef huart2 = {0};	//USART2 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
 
 /*Variables*/
-
+uint8_t rx_data = 0;
 
 /*Prototipo de funciones privadas*/
 static void SystemClock_Config(void);
@@ -73,7 +73,8 @@ int main(void){
 	tim3_adc_Init();
 	adc_Init();
 	tim1_pwm_Init();
-
+	tim2_encoder_Init();
+	usart2_Init();
 
 
 	while(1){
@@ -164,10 +165,10 @@ static void tim1_pwm_Init(void){
 	GPIO_Init_pwm.Pin		= GPIO_PIN_9  |
 							  GPIO_PIN_10 |
 							  GPIO_PIN_11;
-	GPIO_Init_pwm.Mode		= GPIO_MODE_AF_PP;			//Establece los pines en modo función alterna
+	GPIO_Init_pwm.Mode		= GPIO_MODE_AF_PP;			//Establece los pines en modo función alternativa
 	GPIO_Init_pwm.Pull		= GPIO_NOPULL;				//Desactiva resistencias de Pull-Up o Pull-Down
 	GPIO_Init_pwm.Speed		= GPIO_SPEED_FREQ_HIGH;		//Configuración de velocidad como alta
-	GPIO_Init_pwm.Alternate = GPIO_AF1_TIM1;			//Función alernativa correspondiente a AF1
+	GPIO_Init_pwm.Alternate = GPIO_AF1_TIM1;			//Función alernativa correspondiente a AF1 en TIM1
 
 	/*Cargar la configuracion en los registros FSR del MCU */
 	HAL_GPIO_Init(GPIOA, &GPIO_Init_pwm);
@@ -187,7 +188,7 @@ static void tim1_pwm_Init(void){
 	/*Cargar la configuracion en los registros FSR del MCU */
 	HAL_TIM_PWM_Init(&htim1);
 
-	/*Configuración de canales del TIM1: CH2, CH3, CH4*/
+	/*Configuración de canales del TIM1: CH2, CH3 y CH4*/
 	/*Inicialización de estructuras*/
 	TIM_OC_InitTypeDef ConfigOC =  {0};
 
@@ -210,10 +211,67 @@ static void tim1_pwm_Init(void){
 }
 
 
-
+/*
+ * tim2_encoder_Init
+ * Configura el TIM2 (32 bits) en modo Encoder
+ * Utiliza los canales 1 y 2 para las entradas DT (PA0) y CLK (PA1)
+ */
 static void tim2_encoder_Init(void){
 
+	/*Configuración de pines*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef GPIO_Init_encoder = {0};
 
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general de los pines: PA0 y PA1*/
+	GPIO_Init_encoder.Pin 		= GPIO_PIN_0 |
+							  	  GPIO_PIN_1;
+	GPIO_Init_encoder.Mode 		= GPIO_MODE_AF_PP;			//Establece los pines en modo función alternativa
+	GPIO_Init_encoder.Pull 		= GPIO_PULLUP;				//Activa resistencia Pull-Up interna para evitar estados flotantes
+	GPIO_Init_encoder.Speed 	= GPIO_SPEED_FREQ_HIGH;		//Configuración de velocidad como alta
+	GPIO_Init_encoder.Alternate = GPIO_AF1_TIM2;			//Función alternativa correspondiente a AF1 en TIM2
+
+	/*Cargar la configuracion en los registros FSR del MCU */
+	HAL_GPIO_Init(GPIOA, &GPIO_Init_encoder);
+
+	/*Configuración de canales del TIM2: CH1 y CH2*/
+	/*Inicialización de estructuras*/
+	TIM_Encoder_InitTypeDef Config_encoder = {0};
+
+	/*Habilitar reloj de TIM2 en el bus APB1*/
+	__HAL_RCC_TIM2_CLK_ENABLE();
+
+	/*Configuración general del TIM2*/
+	htim2.Instance				 = TIM2;
+	htim2.Init.Prescaler		 = 0;									//No se va a hacer división a los pulsos del encoder
+	htim2.Init.CounterMode		 = TIM_COUNTERMODE_UP;					//El conteo depende del sentido (CW o CCW)
+	htim2.Init.Period 			 = 65535;								//El conteo máximo es 65535 para guardarse en una variable de 16 bit
+	htim2.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;				//División en 1
+	htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;		//Deshabilita la precarga automática
+
+	/*Configuración de los canales*/
+	/*Configuración del encoder para usar ambos canales CH1 y CH2*/
+	Config_encoder.EncoderMode = TIM_ENCODERMODE_TI12;		//Detecta flancos de subida y bajada en cada canal para calcular el sentido de giro (Cuenta 4 veces por ciclo)
+
+	/*Configuración general para CH1*/
+	Config_encoder.IC1Polarity 	= TIM_INPUTCHANNELPOLARITY_RISING;		//Polaridad de entrada con flanco de subida
+	Config_encoder.IC1Selection = TIM_ICSELECTION_DIRECTTI;				//El input 1 (PA0) se conecta al IC1
+	Config_encoder.IC1Prescaler = TIM_ICPSC_DIV1;						//La captura se hace al detectar un flanco sin división
+	Config_encoder.IC1Filter 	= 15;									//Se usa el valor máximo del filtro para evitar rebotes
+
+	/*Configuración general para CH2*/
+	Config_encoder.IC2Polarity 	= TIM_INPUTCHANNELPOLARITY_RISING;		//Polaridad de entrada con flanco de subida
+	Config_encoder.IC2Selection = TIM_ICSELECTION_DIRECTTI;				//El input 2 (PA1) se conecta al IC2
+	Config_encoder.IC2Prescaler = TIM_ICPSC_DIV1;						//La captura se hace al detectar un flanco sin división
+	Config_encoder.IC2Filter 	= 15;									//Se usa el valor máximo del filtro para evitar rebotes
+
+	/*Cargar la configuracion en los registros FSR del MCU*/
+	HAL_TIM_Encoder_Init(&htim2, &Config_encoder);
+
+	/*Inicialización de todos los canales*/
+	HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 
 }
 
@@ -224,7 +282,6 @@ static void tim2_encoder_Init(void){
 static void tim3_adc_Init(void){
 
 	/*Configuración del TIM3*/
-
 	/*Habilitar reloj de TIM3 en el bus APB1*/
 	__HAL_RCC_TIM3_CLK_ENABLE();
 
@@ -264,11 +321,61 @@ static void tim4_led_ok_Init(void){
 }
 
 
+/*
+ * usart2_Init
+ * Configuración de pines físicos como función alternada para la comunicación serial
+ * 19200 8N1
+ */
 static void usart2_Init(void){
 
+	/*Configuración de los pines*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef GPIO_Init_Tx = {0};
+	GPIO_InitTypeDef GPIO_Init_Rx = {0};
 
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general de los pines: PA2 y PA3 */
+	GPIO_Init_Tx.Pin	   = GPIO_PIN_2;
+	GPIO_Init_Tx.Mode 	   = GPIO_MODE_AF_PP;			//Establece los pines en modo función alternativa
+	GPIO_Init_Tx.Pull  	   = GPIO_NOPULL;				//Desactiva resistencias de Pull-Up o Pull-Down
+	GPIO_Init_Tx.Speed	   = GPIO_SPEED_FREQ_HIGH;		//Configuración de velocidad como alta
+	GPIO_Init_Tx.Alternate = GPIO_AF7_USART2;			//Función alternativa correspondiente a AF7 en USART2
+
+	GPIO_Init_Rx.Pin	   = GPIO_PIN_3;
+	GPIO_Init_Rx.Mode 	   = GPIO_MODE_AF_PP;			//Establece los pines en modo función alternativa
+	GPIO_Init_Rx.Pull  	   = GPIO_PULLUP;				//Activa resistencia Pull-Up interna para evitar estados flotantes
+	GPIO_Init_Rx.Speed	   = GPIO_SPEED_FREQ_HIGH;		//Configuración de velocidad como alta
+	GPIO_Init_Rx.Alternate = GPIO_AF7_USART2;			//Función alternativa correspondiente a AF7 en USART2
+
+	/*Cargar la configuración en los registros FSR del MCU*/
+	HAL_GPIO_Init(GPIOA, &GPIO_Init_Tx);
+	HAL_GPIO_Init(GPIOA, &GPIO_Init_Rx);
+
+	/*Configuración del USART2*/
+	/*Habilitar reloj de TIM2 en el bus APB1*/
+	__HAL_RCC_USART2_CLK_ENABLE();
+
+	/*Configuración general del USART2*/
+	huart2.Instance          = USART2;
+	huart2.Init.BaudRate     = 19200;
+	huart2.Init.Mode         = UART_MODE_TX_RX;			//
+	huart2.Init.Parity       = UART_PARITY_NONE;
+	huart2.Init.StopBits     = UART_STOPBITS_1;			//1 bit de parada
+	huart2.Init.WordLength   = UART_WORDLENGTH_8B;		//8N1
+
+	/*Cargar la configuración en los registros FSR del MCU*/
+	HAL_UART_Init(&huart2);
+
+	/*Registrando la interrupción en el NVIC para la recepción*/
+	HAL_NVIC_EnableIRQ(USART2_IRQn);
+
+	/*Habilitar la interrupción para la recepción de datos*/
+	HAL_UART_Receive_IT(&huart2, &rx_data, 1);	//El dato se guarda en la variable rx_data de a byte
 
 }
+
 
 /*
  * adc_Init
