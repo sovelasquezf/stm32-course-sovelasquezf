@@ -72,7 +72,7 @@ int main(void){
 
 	tim3_adc_Init();
 	adc_Init();
-
+	tim1_pwm_Init();
 
 
 
@@ -146,12 +146,69 @@ static void gpio_Init(void){
 }
 
 
-
+/*
+ * tim1_pwm_Init
+ * Configura el TIM1 en modo PWM para controlar los canales 2, 3 y 4
+ * Frecuencia 2.5 kHz
+ */
 static void tim1_pwm_Init(void){
 
+	/*Configuración de pines*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef GPIO_Init_pwm = {0};
 
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general de los pines: PA9, PA10, PA11*/
+	GPIO_Init_pwm.Pin		= GPIO_PIN_9  |
+							  GPIO_PIN_10 |
+							  GPIO_PIN_11;
+	GPIO_Init_pwm.Mode		= GPIO_MODE_AF_PP;			//Establece los pines en modo función alterna
+	GPIO_Init_pwm.Pull		= GPIO_NOPULL;				//Desactiva resistencias de Pull-Up o Pull-Down
+	GPIO_Init_pwm.Speed		= GPIO_SPEED_FREQ_HIGH;		//Configuración de velocidad como alta
+	GPIO_Init_pwm.Alternate = GPIO_AF1_TIM1;			//Función alernativa correspondiente a AF1
+
+	/*Cargar la configuracion en los registros FSR del MCU */
+	HAL_GPIO_Init(GPIOA, &GPIO_Init_pwm);
+
+	/*Configuración del TIM1*/
+	/*Habilitar reloj de TIM1 en el bus APB2*/
+	__HAL_RCC_TIM1_CLK_ENABLE();
+
+	/*Configuración general del TIM1*/
+	htim1.Instance				 = TIM1;
+	htim1.Init.Prescaler		 = 16 - 1;							//Configurando el Prescaler a 1 us (16 MHz / 16 = 1 MHz)
+	htim1.Init.CounterMode		 = TIM_COUNTERMODE_UP;				//Conteo ascendente
+	htim1.Init.Period 			 = 400 - 1;							//Periodo de 1 us * 400 = 400 us (2.5 kHz)
+	htim1.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;			//División en 1 = 2.5 kHz
+	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;	//Habilita la precarga automática
+
+	/*Cargar la configuracion en los registros FSR del MCU */
+	HAL_TIM_PWM_Init(&htim1);
+
+	/*Configuración de canales del TIM1: CH2, CH3, CH4*/
+	/*Inicialización de estructuras*/
+	TIM_OC_InitTypeDef ConfigOC =  {0};
+
+	/*Configuración general de los canales*/
+	ConfigOC.OCMode 	= TIM_OCMODE_PWM1;		//Establece el modo PWM1 (Salida en alto mientras CNT < CCR)
+	ConfigOC.Pulse 		= 0;					//Inicializa el CCR en 0%
+	ConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;	//Configura polaridad alta (En alto hay un 1 lógico)
+	ConfigOC.OCFastMode = TIM_OCFAST_DISABLE;	//Evita fallos en el ciclo de trabajo (Sólo cambiará su estado después de una comparación válida entre el CNT y CCR)
+
+	/*Cargar la configuracion en los registros FSR del MCU (Para cada canal) */
+	HAL_TIM_PWM_ConfigChannel(&htim1, &ConfigOC, TIM_CHANNEL_2);
+	HAL_TIM_PWM_ConfigChannel(&htim1, &ConfigOC, TIM_CHANNEL_3);
+	HAL_TIM_PWM_ConfigChannel(&htim1, &ConfigOC, TIM_CHANNEL_4);
+
+	/*Inicialiación de cada canal */
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
 }
+
 
 
 static void tim2_encoder_Init(void){
@@ -161,15 +218,17 @@ static void tim2_encoder_Init(void){
 }
 
 /*
+ * tim3_adc_Init
  * Configuración del TIM3 a 20 ms para disparar el ADC usando la señal TGRO
  */
 static void tim3_adc_Init(void){
 
+	/*Configuración del TIM3*/
+
 	/*Habilitar reloj de TIM3 en el bus APB1*/
 	__HAL_RCC_TIM3_CLK_ENABLE();
 
-	/*Configuración base del TIM3*/
-
+	/*Configuración general del TIM3*/
 	htim3.Instance				 = TIM3;
 	htim3.Init.Prescaler		 = 16000 - 1;						//Configurando el Prescaler a 1 ms (16 MHz / 16 kHz = 1 kHz)
 	htim3.Init.CounterMode 		 = TIM_COUNTERMODE_UP;				//Conteo ascendente
@@ -217,20 +276,23 @@ static void usart2_Init(void){
  */
 static void adc_Init(void){
 
+	/*Configuración de PA6*/
+
 	/*Inicialización de estructuras*/
 	GPIO_InitTypeDef GPIO_Init_adc_ch6 = {0};
 
 	/*Habilitar reloj de GPIOA en el bus AHB1*/
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 
-	/*Configuración de PA6*/
+	/*Configuración dgeneral del pin*/
 	GPIO_Init_adc_ch6.Pin  = GPIO_PIN_6;
 	GPIO_Init_adc_ch6.Mode = GPIO_MODE_ANALOG;
 	GPIO_Init_adc_ch6.Pull = GPIO_NOPULL;
 
 	/*Cargar la configuracion en los registros FSR del MCU */
 	HAL_GPIO_Init(GPIOA, &GPIO_Init_adc_ch6);
-	__NOP();
+
+	/*Configuración del ADC*/
 
 	/*Habilitar reloj de ADC en el bus APB2*/
 	__HAL_RCC_ADC1_CLK_ENABLE();
