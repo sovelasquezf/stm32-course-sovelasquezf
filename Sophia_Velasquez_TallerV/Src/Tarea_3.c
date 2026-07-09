@@ -50,7 +50,22 @@ UART_HandleTypeDef huart2 = {0};	//USART2 handle debe ser global para que stm32f
 
 
 /*Variables*/
+uint8_t init_Msg[] =
+"\r\n"
+"Tarea 3 - Sophia Velasquez\r\n"
+"--------------------------------------------------\r\n"
+"Caracteres para la recepción:\r\n"
+" '+': Incrementa el brillo en 1%\r\n"
+" '-': Decrementa el brillo en 1%\r\n"
+" '0': Lleva el valor a 0%\r\n"
+" 'M': Lleva el valor al punto intermedio (50%)\r\n"
+"--------------------------------------------------\r\n"
+"\r\n";
 uint8_t rx_data = 0;
+
+
+
+
 
 /*Prototipo de funciones privadas*/
 static void SystemClock_Config(void);
@@ -66,17 +81,21 @@ static void mco1_Init(void);
 
 int main(void){
 
-	HAL_Init();
-	SystemClock_Config();
-	gpio_Init();
-	tim4_led_ok_Init();
+	/*Inicialización de los bloques independientes*/
+	HAL_Init();				//Inicializa HAL: SysTick, caché, agrupación de prioridades
+	SystemClock_Config();	//Configura el árbol de relojes: HSI a 16 MHz
+	gpio_Init();			//Configura PH1 (Led en la tarjeta nucleo)
+	tim4_led_ok_Init();		//Configura TIM4: evento de actualización cada 250 ms
 
-	tim3_adc_Init();
-	adc_Init();
-	tim1_pwm_Init();
-	tim2_encoder_Init();
-	usart2_Init();
-	mco1_Init();
+	tim1_pwm_Init();		//Configura PWM a 2.5 kHz para el led RGB (PA9, PA10, PA11) con resolución de 400
+	tim2_encoder_Init();	//Configura TIM2 en modo Encoder (PA0, PA1)
+	tim3_adc_Init();		//Configura TIM3 para el disparo del ADC (PA6) usando el TGRO (Trigger automático a 20ms)
+	usart2_Init();			//Configura USART2 a 19200 bps (8N1) en modo asíncrono (UART) para transmisión y recepción
+	adc_Init();				//Configura PA6 para ADC de 12 bits sincronizado con TIM3
+	mco1_Init();			//Habilita el pin PA8 para monitorear el reloj HSI en osciloscopio
+
+	/*Recepción del mensaje inicial (Instrucción con los caracteres específicos a usar)*/
+	HAL_UART_Transmit(&huart2, (uint8_t *) init_Msg, strlen((char *) init_Msg), 200);
 
 	while(1){
 
@@ -125,7 +144,7 @@ static void SystemClock_Config(void){
 
 /*
  * gpio_Init
- * Configura PH1 como salida push-pull (LED D2 de la tarjeta nucleo)
+ * Configura PH1 como salida push-pull (Led D2 de la tarjeta nucleo)
  */
 static void gpio_Init(void){
 
@@ -494,6 +513,19 @@ static void mco1_Init(void){
 }
 
 
+/*
+ * HAL_TIM_PeriodElapsedCallback
+ * Llamado automáticamente por HAL_TIM_IRQHandler() cada vez que un evento de actualización del timer se dispara
+ * Es compartido por todos los timers (Siempre verifica htim->Instance)
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+
+    if(htim->Instance == TIM4){
+
+        HAL_GPIO_TogglePin(GPIOH, GPIO_PIN_1);
+
+    }
+}
 
 
 
