@@ -28,7 +28,7 @@
  * 		PH1: Pin asociado a D2 en la board táctica
  *
  * 	- Extra - AF00:
- * 		PA8: MC0_1
+ * 		PA8: MCO_1
  *
  */
 
@@ -61,7 +61,7 @@ static void tim3_adc_Init(void);
 static void tim4_led_ok_Init(void);
 static void usart2_Init(void);
 static void adc_Init(void);
-static void mc01_Init(void);
+static void mco1_Init(void);
 
 
 int main(void){
@@ -69,13 +69,14 @@ int main(void){
 	HAL_Init();
 	SystemClock_Config();
 	gpio_Init();
+	tim4_led_ok_Init();
 
 	tim3_adc_Init();
 	adc_Init();
 	tim1_pwm_Init();
 	tim2_encoder_Init();
 	usart2_Init();
-
+	mco1_Init();
 
 	while(1){
 
@@ -131,18 +132,17 @@ static void gpio_Init(void){
 	/*Inicialización de estructuras*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-	/*Habilitar reloj de GPIOH en el bus AHB1 (Equivalente bare-metal: RCC->AHB1ENR |= RCC_AHB1ENR_GPIOHEN)*/
+	/*Habilitar reloj de GPIOH en el bus AHB1*/
 	__HAL_RCC_GPIOH_CLK_ENABLE();
 
     /*Configuración PH1*/
     GPIO_InitStruct.Pin   = GPIO_PIN_1;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull  = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;		//Establece el pin en modo salida Push-Pull
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;				//Desactiva resistencias de Pull-Up o Pull-Down
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;		//Configuración de velocidad como baja
 
     /*Cargando la configuración en los registros FSR del MCU*/
     HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
-    __NOP();
 
 }
 
@@ -179,11 +179,11 @@ static void tim1_pwm_Init(void){
 
 	/*Configuración general del TIM1*/
 	htim1.Instance				 = TIM1;
-	htim1.Init.Prescaler		 = 16 - 1;							//Configurando el Prescaler a 1 us (16 MHz / 16 = 1 MHz)
-	htim1.Init.CounterMode		 = TIM_COUNTERMODE_UP;				//Conteo ascendente
-	htim1.Init.Period 			 = 400 - 1;							//Periodo de 1 us * 400 = 400 us (2.5 kHz)
-	htim1.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;			//División en 1 = 2.5 kHz
-	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;	//Habilita la precarga automática
+	htim1.Init.Prescaler		 = 16 - 1;								//Configurando el Prescaler a 1 us (16 MHz / 16 = 1 MHz)
+	htim1.Init.CounterMode		 = TIM_COUNTERMODE_UP;					//Conteo ascendente
+	htim1.Init.Period 			 = 400 - 1;								//Periodo de 1 us * 400 = 400 us (2.5 kHz)
+	htim1.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;				//División en 1 = 2.5 kHz
+	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;		//Habilita la precarga automática
 
 	/*Cargar la configuracion en los registros FSR del MCU */
 	HAL_TIM_PWM_Init(&htim1);
@@ -193,10 +193,10 @@ static void tim1_pwm_Init(void){
 	TIM_OC_InitTypeDef ConfigOC =  {0};
 
 	/*Configuración general de los canales*/
-	ConfigOC.OCMode 	= TIM_OCMODE_PWM1;		//Establece el modo PWM1 (Salida en alto mientras CNT < CCR)
-	ConfigOC.Pulse 		= 0;					//Inicializa el CCR en 0%
-	ConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;	//Configura polaridad alta (En alto hay un 1 lógico)
-	ConfigOC.OCFastMode = TIM_OCFAST_DISABLE;	//Evita fallos en el ciclo de trabajo (Sólo cambiará su estado después de una comparación válida entre el CNT y CCR)
+	ConfigOC.OCMode 	= TIM_OCMODE_PWM1;			//Establece el modo PWM1 (Salida en alto mientras CNT < CCR)
+	ConfigOC.Pulse 		= 0;						//Inicializa el CCR en 0%
+	ConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;		//Configura polaridad alta (En alto hay un 1 lógico)
+	ConfigOC.OCFastMode = TIM_OCFAST_DISABLE;		//Evita fallos en el ciclo de trabajo (Sólo cambiará su estado después de una comparación válida entre el CNT y CCR)
 
 	/*Cargar la configuracion en los registros FSR del MCU (Para cada canal) */
 	HAL_TIM_PWM_ConfigChannel(&htim1, &ConfigOC, TIM_CHANNEL_2);
@@ -287,11 +287,11 @@ static void tim3_adc_Init(void){
 
 	/*Configuración general del TIM3*/
 	htim3.Instance				 = TIM3;
-	htim3.Init.Prescaler		 = 16000 - 1;						//Configurando el Prescaler a 1 ms (16 MHz / 16 kHz = 1 kHz)
-	htim3.Init.CounterMode 		 = TIM_COUNTERMODE_UP;				//Conteo ascendente
-	htim3.Init.Period 			 = 20 - 1;							//Periodo de 1 ms * 20 = 20 ms
-	htim3.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;			//División en 1 = 20 ms
-	htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	htim3.Init.Prescaler		 = 16000 - 1;							//Configurando el Prescaler a 1 ms (16 MHz / 16 kHz = 1 kHz)
+	htim3.Init.CounterMode 		 = TIM_COUNTERMODE_UP;					//Conteo ascendente
+	htim3.Init.Period 			 = 20 - 1;								//Periodo de 1 ms * 20 = 20 ms
+	htim3.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;				//División en 1 = 20 ms
+	htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;		//Deshabilita la precarga automática
 
 	/*Cargando la configuración en los registros FSR del MCU*/
 	HAL_TIM_Base_Init(&htim3);
@@ -314,9 +314,32 @@ static void tim3_adc_Init(void){
 }
 
 
+/*
+ * tim4_led_ok_Init
+ * Configura TIM4 para generar un evento de actualización cada 250 ms
+ */
 static void tim4_led_ok_Init(void){
 
+	/*Configuración del TIM4*/
+	/*Habilitar reloj de TIM4 en el bus APB1*/
+	__HAL_RCC_TIM4_CLK_ENABLE();
 
+	/*Configuración general del TIM3*/
+	htim4.Instance				 = TIM4;
+	htim4.Init.Prescaler		 = 16000 - 1;							//Configurando el Prescaler a 1 ms (16 MHz / 16 kHz = 1 kHz)
+	htim4.Init.CounterMode 		 = TIM_COUNTERMODE_UP;					//Conteo ascendente
+	htim4.Init.Period 			 = 250 - 1;								//Periodo de 1 ms * 250 = 250 ms
+	htim4.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;				//División en 1 = 250 ms
+	htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;		//Deshabilita la precarga automática
+
+	/*Cargando la configuración en los registros FSR del MCU*/
+	HAL_TIM_Base_Init(&htim4);
+
+	/*Registrando la interrupción en el NVIC para la recepción*/
+	HAL_NVIC_EnableIRQ(TIM4_IRQn);
+
+	/*Inicialización del TIM4 en modo de interrupción Update Event Interrupt (UEI)*/
+	HAL_TIM_Base_Start_IT(&htim4);
 
 }
 
@@ -360,10 +383,10 @@ static void usart2_Init(void){
 	/*Configuración general del USART2*/
 	huart2.Instance          = USART2;
 	huart2.Init.BaudRate     = 19200;
-	huart2.Init.Mode         = UART_MODE_TX_RX;			//
-	huart2.Init.Parity       = UART_PARITY_NONE;
+	huart2.Init.Mode         = UART_MODE_TX_RX;			//Establece modo de transmisión (Tx) y recepción (Rx)
+	huart2.Init.Parity       = UART_PARITY_NONE;		//Sin paridad
 	huart2.Init.StopBits     = UART_STOPBITS_1;			//1 bit de parada
-	huart2.Init.WordLength   = UART_WORDLENGTH_8B;		//8N1
+	huart2.Init.WordLength   = UART_WORDLENGTH_8B;		//8 bits de datos
 
 	/*Cargar la configuración en los registros FSR del MCU*/
 	HAL_UART_Init(&huart2);
@@ -384,23 +407,21 @@ static void usart2_Init(void){
 static void adc_Init(void){
 
 	/*Configuración de PA6*/
-
 	/*Inicialización de estructuras*/
 	GPIO_InitTypeDef GPIO_Init_adc_ch6 = {0};
 
 	/*Habilitar reloj de GPIOA en el bus AHB1*/
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 
-	/*Configuración dgeneral del pin*/
+	/*Configuración general del pin*/
 	GPIO_Init_adc_ch6.Pin  = GPIO_PIN_6;
-	GPIO_Init_adc_ch6.Mode = GPIO_MODE_ANALOG;
-	GPIO_Init_adc_ch6.Pull = GPIO_NOPULL;
+	GPIO_Init_adc_ch6.Mode = GPIO_MODE_ANALOG;		//Configura el pin en modo analógico
+	GPIO_Init_adc_ch6.Pull = GPIO_NOPULL;			//Desactiva resistencias de Pull-Up o Pull-Down
 
-	/*Cargar la configuracion en los registros FSR del MCU */
+	/*Cargar la configuracion en los registros FSR del MCU*/
 	HAL_GPIO_Init(GPIOA, &GPIO_Init_adc_ch6);
 
 	/*Configuración del ADC*/
-
 	/*Habilitar reloj de ADC en el bus APB2*/
 	__HAL_RCC_ADC1_CLK_ENABLE();
 
@@ -444,9 +465,31 @@ static void adc_Init(void){
 }
 
 
-static void mc01_Init(void){
+/*
+ * mco1_Init
+ * Configura el MCO1 como salida para leer el HSI en PA8
+ */
+static void mco1_Init(void){
 
+	/*Configuración de los pines*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef mco1_Init = {0};
 
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general de los pines: PA8*/
+	mco1_Init.Pin	    = GPIO_PIN_8;
+	mco1_Init.Mode 	    = GPIO_MODE_AF_PP;				//Establece los pines en modo función alternativa
+	mco1_Init.Pull  	= GPIO_NOPULL;					//Desactiva resistencias de Pull-Up o Pull-Down
+	mco1_Init.Speed	    = GPIO_SPEED_FREQ_VERY_HIGH;	//Configuración de velocidad como muy alta para evitar distorsiones
+	mco1_Init.Alternate = GPIO_AF0_MCO;					//Función alternativa correspondiente a AF0 en MCO1
+
+	/*Cargar la configuracion en los registros FSR del MCU*/
+	HAL_GPIO_Init(GPIOA, &mco1_Init);
+
+	/*Inicialización del MCO1*/
+	HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);		//Se redirige la señal del Oscilador Interno de Alta Velocidad (HSI) a PA8
 
 }
 
