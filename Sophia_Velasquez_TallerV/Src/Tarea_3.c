@@ -34,7 +34,9 @@
 
 #include <stm32f4xx_hal.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 TIM_HandleTypeDef htim1;			//TIM1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
@@ -61,10 +63,40 @@ uint8_t init_Msg[] =
 " 'M': Lleva el valor al punto intermedio (50%)\r\n"
 "--------------------------------------------------\r\n"
 "\r\n";
+
+volatile uint16_t pwm_rojo = 0;
+volatile uint16_t pwm_verde = 0;
+volatile uint16_t pwm_azul = 0;
+
+volatile uint16_t actual_rojo = 0;
+volatile uint16_t actual_verde = 0;
+volatile uint16_t actual_azul = 0;
+
+volatile uint16_t raw_adc = 0;
+volatile uint16_t adc_done = 0;
+
+volatile uint16_t raw_usart = 0;
+volatile uint8_t usart_done = 0;
 uint8_t rx_data = 0;
+uint8_t msg_buffer[256];
+float adc_value_mv = 0.0f;
+
+volatile uint16_t raw_encoder = 0;
+volatile uint16_t encoder_dir = 0;
+char* dir_str = 0;
 
 
 
+/*Implementación FSM*/
+typedef enum{
+	STATE_CHECK = 0,		//Verifica el cambio en algún periférico
+	STATE_UPDATE_ADC,		//Estado de lectura analógica y actualización del azul
+	STATE_UPDATE_ENCODER,	//
+	STATE_UPDATE_USART,
+	STATE_TRANSMIT_MSG
+} FSM_STATE;
+
+FSM_STATE estado_actual = STATE_CHECK;
 
 
 /*Prototipo de funciones privadas*/
@@ -97,7 +129,173 @@ int main(void){
 	/*Recepción del mensaje inicial (Instrucción con los caracteres específicos a usar)*/
 	HAL_UART_Transmit(&huart2, (uint8_t *) init_Msg, strlen((char *) init_Msg), 200);
 
+	/*Inicializa todos los canales en 0%*/
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
+
 	while(1){
+
+		switch(estado_actual){
+
+		case STATE_CHECK:
+
+			if(usart_done){
+
+				estado_actual = STATE_UPDATE_USART;
+
+			}
+
+			else if((__HAL_TIM_GET_COUNTER(&htim2) / 4) != actual_verde){
+
+				estado_actual = STATE_UPDATE_ENCODER;
+
+			}
+
+			else if(adc_done == 1){
+
+				uint16_t temp_azul = (raw_adc * 400) / 4095;		//Lectura temporal del PWM azul
+
+				if(abs((int)temp_azul - (int)actual_azul) > 4){		//Se verifica que si haya una diferencia mayor al 1% (4 unidades)
+
+					estado_actual = STATE_UPDATE_ADC;
+
+				}
+
+				else{
+
+					adc_done = 0;	//Si la diferencia no se cumple se toma como ruido y se limpia la bandera
+
+				}
+
+			}
+
+			break;
+
+		case STATE_UPDATE_ADC:
+
+			pwm_azul = (raw_adc * 400) / 4095;							//Se hace la conversión del raw_adc
+
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm_azul);		//Se carga el valor del CCR al PWM del canal 4
+
+			actual_azul = pwm_azul;										//Se sobreescribe el valor para la próxima comparación
+
+			estado_actual = STATE_TRANSMIT_MSG;
+
+			adc_done = 0;												//Se baja la bandera
+
+			break;
+
+		case STATE_UPDATE_ENCODER:
+
+			raw_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;
+
+			actual_verde = raw_encoder;
+
+			pwm_verde = raw_encoder * 4;
+
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_verde);
+
+			estado_actual = STATE_TRANSMIT_MSG;
+
+			break;
+
+		case STATE_UPDATE_USART:
+
+			raw_usart = pwm_rojo / 4;
+
+			if(rx_data == '+'){
+				if(raw_usart < 100){
+
+					raw_usart++;
+
+				}
+
+			}
+
+			else if(rx_data == '-'){
+				if(raw_usart > 0){
+
+					raw_usart--;
+
+				}
+
+			}
+
+			else if(rx_data == '0'){
+
+				raw_usart = 0;
+
+			}
+
+			else if(rx_data == 'M'){
+
+				raw_usart = 50;
+
+			}
+
+			pwm_rojo = raw_usart * 4;
+
+			actual_rojo = pwm_rojo;
+
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_rojo);
+
+
+			HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+
+
+			usart_done = 0;
+
+			estado_actual = STATE_TRANSMIT_MSG;
+
+			break;
+
+		case STATE_TRANSMIT_MSG:
+
+			adc_value_mv = (float)((3300.0f / 4095.0f) * raw_adc);
+
+			encoder_dir = __HAL_TIM_IS_TIM_COUNTING_DOWN(&htim2);
+
+			if(encoder_dir == 1){
+
+				dir_str = "CCW";
+
+			}
+
+			else if(encoder_dir == 0){
+
+				dir_str = "CW";
+
+			}
+
+
+			uint16_t clicks_rojo = pwm_rojo / 4;
+
+			uint16_t pasos_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;
+
+			sprintf((char *)msg_buffer,
+			"--------------------------------------------------\r\n"
+			"ADC value = %u raw\r\n"
+			"ADC value = %.0f mV\r\n"
+			"Encoder dir: %s, value = %d\r\n"
+			"UART value = %u clicks\r\n"
+			"--------------------------------------------------\r\n"
+			"\r\n",raw_adc, adc_value_mv, dir_str, pasos_encoder, clicks_rojo);
+
+			HAL_UART_Transmit(&huart2, msg_buffer, strlen((char *)msg_buffer), 200);
+
+			estado_actual = STATE_CHECK;
+
+
+			break;
+
+		default:
+
+			estado_actual = STATE_CHECK;
+
+			break;
+
+		}
 
 	}
 
@@ -528,5 +726,35 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 }
 
 
+/*
+ * HAL_ADC_ConvCpltCallback
+ * Callback de la conversión ADC
+ */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 
+	if(hadc->Instance == ADC1){
+
+		/*Cargando el dato de la conversión en una variable*/
+		raw_adc = hadc->Instance->DR;
+
+		adc_done = 1;
+
+	}
+
+}
+
+
+/*
+ * HAL_UART_RxCpltCallback
+ * Callback de la recepción USART
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+
+    if (huart->Instance == USART2){
+
+        usart_done = 1;
+
+    }
+
+}
 
