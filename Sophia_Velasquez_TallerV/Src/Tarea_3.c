@@ -3,7 +3,7 @@
  *
  *  Created on: Jul 3, 2026
  *      Author: Sophia Alejandra Velasquez Fuentes - sovelasquezf@unal.edu.co
- *      Brief: Contador con fotocompuertas
+ *      Brief: Led RGB controlado por señales PWM dirigidas por elementos diferentes (USART, Encoder y ADC (Potenciometro))
  *
  *  Distribución de los Timers - Pines
  *
@@ -14,8 +14,8 @@
  *
  *  - TIM2
  *    (Encoder - Verde) - AF01
- *  	CH1 -> PA0: DT
- *  	CH2 -> PA1: CLK
+ *  	CH1 -> PA0: CLK
+ *  	CH2 -> PA1: DT
  *
  *    (Comunicación Serial - Rojo) - AF07
  *  	CH3 -> PA2: USART2_TX (Transmisión)
@@ -29,6 +29,32 @@
  *
  * 	- Extra - AF00:
  * 		PA8: MCO_1
+ *
+ *
+ *	Descripción del código
+ *
+ *	El sistema controla la intensidad de un LED RGB mediante 3 señales PWM
+ *	independientes que se manejan por 3 periféricos diferentes. Las señales
+ *	PWM son generadas por el temporizador TIM1 a una frecuencia fija de
+ *	2.5 kHz y con una resolución o escala de 0 a 400 unidades de conteo.
+ *
+ *	- Canal Rojo (USART en PA2 y PA3): El periférico USART2 recibe comandos
+ *	asíncronos desde la PC a 19200 bps. Los caracteres +, -, 0 y M modifican
+ *	el brillo en pasos exactos del 1% (4 unidades de PWM).
+ *
+ *	- Canal Verde (Encoder en PA0 y PA1): Procesa el desplazamiento angular
+ *	del encoder de forma que se cuenta de forma automática cada transición
+ *	eléctrica entre los pines, además de sumar o restar cuentas según la
+ *	dirección en que se gira.
+ *
+ *	- Canal Azul (ADC en PA6): El temporizador TIM3 dispara automáticamente
+ *	por TGRO activando el ADC de 12 bits cada 20 ms. Además se filtra por
+ *	software de forma que las variaciones menores a 1% no afecten al sistema.
+ *
+ *	Cada vez que un periférico cambia de forma válida, se pasa a transmitir
+ *	un mensaje por puerto serial donde se muestran los valores en los que se
+ *	encuentar el sistema. En paralelo, el TIM4 genera por interrupción un
+ *	parpadeo permanente de seguridad en el pin PH1 cada 250 ms.
  *
  */
 
@@ -52,6 +78,7 @@ UART_HandleTypeDef huart2 = {0};	//USART2 handle debe ser global para que stm32f
 
 
 /*Variables*/
+/*Mensaje inicial con las indicaciones para la recepción*/
 uint8_t init_Msg[] =
 "\r\n"
 "Tarea 3 - Sophia Velasquez\r\n"
@@ -64,36 +91,38 @@ uint8_t init_Msg[] =
 "--------------------------------------------------\r\n"
 "\r\n";
 
+/*Variables donde se almacena el dutty cycle para cada canal (Verde: CH2, Rojo: CH3 y Azul: CH4*/
 volatile uint16_t pwm_rojo = 0;
 volatile uint16_t pwm_verde = 0;
 volatile uint16_t pwm_azul = 0;
 
+/*Variables usadas para hacer la comparación a la hora de actualizar los valores*/
 volatile uint16_t actual_rojo = 0;
 volatile uint16_t actual_verde = 0;
 volatile uint16_t actual_azul = 0;
 
-volatile uint16_t raw_adc = 0;
-volatile uint16_t adc_done = 0;
+volatile uint16_t raw_adc = 0;		//Almacena el valor para la conversión ADC
+volatile uint16_t adc_done = 0;		//Bandera para la conversión ADC
+float adc_value_mv = 0.0f;			//Almacena el valor convertido por ADC en mV
 
-volatile uint16_t raw_usart = 0;
-volatile uint8_t usart_done = 0;
-uint8_t rx_data = 0;
-uint8_t msg_buffer[256];
-float adc_value_mv = 0.0f;
+volatile uint16_t raw_usart = 0;	//Almacena el valor para la comunicación serial
+volatile uint8_t usart_done = 0;	//Bandera para la comunicación serial
+uint8_t rx_data = 0;				//Almacena el caracter recibido en la recepción
 
-volatile uint16_t raw_encoder = 0;
-volatile uint16_t encoder_dir = 0;
-char* dir_str = 0;
+volatile uint16_t raw_encoder = 0;	//Almacena el valor para el modo Encoder
+volatile uint16_t encoder_dir = 0;	//Se guarda el valor de la dirección del Encoder (CW = 0 y CCW = 1)
+char* dir_str = 0;					//Streing que indica la dirección usado en la transmisión
 
+uint8_t msg_buffer[256];			//Mensaje completo donde se muestran los valores actuales del equipo a medida que se van actualizando
 
 
 /*Implementación FSM*/
 typedef enum{
-	STATE_CHECK = 0,		//Verifica el cambio en algún periférico
+	STATE_CHECK = 0,		//Verifica el cambio en algún periférico comparando con los valores actuales
 	STATE_UPDATE_ADC,		//Estado de lectura analógica y actualización del azul
-	STATE_UPDATE_ENCODER,	//
-	STATE_UPDATE_USART,
-	STATE_TRANSMIT_MSG
+	STATE_UPDATE_ENCODER,	//Estado de lectura del Encoder y actualización del verde
+	STATE_UPDATE_USART,		//Esatado de recepcion de caracteres y actualización del rojo
+	STATE_TRANSMIT_MSG		//Transmisión de datos actualizados
 } FSM_STATE;
 
 FSM_STATE estado_actual = STATE_CHECK;
@@ -126,7 +155,7 @@ int main(void){
 	adc_Init();				//Configura PA6 para ADC de 12 bits sincronizado con TIM3
 	mco1_Init();			//Habilita el pin PA8 para monitorear el reloj HSI en osciloscopio
 
-	/*Recepción del mensaje inicial (Instrucción con los caracteres específicos a usar)*/
+	/*Transmisión del mensaje inicial (Instrucción con los caracteres específicos a usar)*/
 	HAL_UART_Transmit(&huart2, (uint8_t *) init_Msg, strlen((char *) init_Msg), 200);
 
 	/*Inicializa todos los canales en 0%*/
@@ -140,19 +169,19 @@ int main(void){
 
 		case STATE_CHECK:
 
-			if(usart_done){
+			if(usart_done == 1){						//Verifica si llegó un nuevo carácter por recepción
 
 				estado_actual = STATE_UPDATE_USART;
 
 			}
 
-			else if((__HAL_TIM_GET_COUNTER(&htim2) / 4) != actual_verde){
+			else if((__HAL_TIM_GET_COUNTER(&htim2) / 4) != actual_verde){		//Verifica si el registro del encoder varió respecto al valor almacenado
 
 				estado_actual = STATE_UPDATE_ENCODER;
 
 			}
 
-			else if(adc_done == 1){
+			else if(adc_done == 1){									//Verifica si el ADC terminó una conversión controlada por el TGRO
 
 				uint16_t temp_azul = (raw_adc * 400) / 4095;		//Lectura temporal del PWM azul
 
@@ -174,27 +203,27 @@ int main(void){
 
 		case STATE_UPDATE_ADC:
 
-			pwm_azul = (raw_adc * 400) / 4095;							//Se hace la conversión del raw_adc
+			pwm_azul = (raw_adc * 400) / 4095;							//Se hace la conversión a la escala de 0 a 400
 
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pwm_azul);		//Se carga el valor del CCR al PWM del canal 4
 
 			actual_azul = pwm_azul;										//Se sobreescribe el valor para la próxima comparación
 
-			estado_actual = STATE_TRANSMIT_MSG;
-
 			adc_done = 0;												//Se baja la bandera
+
+			estado_actual = STATE_TRANSMIT_MSG;
 
 			break;
 
 		case STATE_UPDATE_ENCODER:
 
-			raw_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;
+			raw_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;			//Se lee el valor contado (Se divide por la cantidad de flancos contados)
 
-			actual_verde = raw_encoder;
+			actual_verde = raw_encoder;									//Se sobreescribe el valor para la próxima comparación
 
-			pwm_verde = raw_encoder * 4;
+			pwm_verde = raw_encoder * 4;								//Se hace la conversión para que el valor vaya de 0 a 400
 
-			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_verde);
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_verde);	//Se carga el valor del CCR al PWM del canal 2
 
 			estado_actual = STATE_TRANSMIT_MSG;
 
@@ -202,9 +231,10 @@ int main(void){
 
 		case STATE_UPDATE_USART:
 
-			raw_usart = pwm_rojo / 4;
+			raw_usart = pwm_rojo / 4;		//Convierte temporalmente el ciclo actual de PWM a escala de clics (0-100)
 
-			if(rx_data == '+'){
+			/*Identificación de caracteres a recibir*/
+			if(rx_data == '+'){				//Aumento de 1%
 				if(raw_usart < 100){
 
 					raw_usart++;
@@ -213,7 +243,7 @@ int main(void){
 
 			}
 
-			else if(rx_data == '-'){
+			else if(rx_data == '-'){		//Decremento de 1%
 				if(raw_usart > 0){
 
 					raw_usart--;
@@ -222,29 +252,27 @@ int main(void){
 
 			}
 
-			else if(rx_data == '0'){
+			else if(rx_data == '0'){		//Reinicia en 0%
 
 				raw_usart = 0;
 
 			}
 
-			else if(rx_data == 'M'){
+			else if(rx_data == 'M'){		//Lleva a punto medio (50%)
 
 				raw_usart = 50;
 
 			}
 
-			pwm_rojo = raw_usart * 4;
+			pwm_rojo = raw_usart * 4;		//Reescala nuevamente de 0 a 400
 
 			actual_rojo = pwm_rojo;
 
-			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_rojo);
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_rojo);		//Se carga el valor del CCR al PWM del canal 2
 
+			HAL_UART_Receive_IT(&huart2, &rx_data, 1);					//Reactiva la interrupción de recepción UART para el siguiente byte
 
-			HAL_UART_Receive_IT(&huart2, &rx_data, 1);
-
-
-			usart_done = 0;
+			usart_done = 0;												//Se baja la bandera
 
 			estado_actual = STATE_TRANSMIT_MSG;
 
@@ -252,9 +280,9 @@ int main(void){
 
 		case STATE_TRANSMIT_MSG:
 
-			adc_value_mv = (float)((3300.0f / 4095.0f) * raw_adc);
+			adc_value_mv = (float)((3300.0f / 4095.0f) * raw_adc);		//Conversión del valor raw adc en un valor de mV
 
-			encoder_dir = __HAL_TIM_IS_TIM_COUNTING_DOWN(&htim2);
+			encoder_dir = __HAL_TIM_IS_TIM_COUNTING_DOWN(&htim2);		//Evaluación de la dirección de conteo para después escribir el string indicado
 
 			if(encoder_dir == 1){
 
@@ -269,23 +297,23 @@ int main(void){
 			}
 
 
-			uint16_t clicks_rojo = pwm_rojo / 4;
+			uint16_t clicks_rojo = pwm_rojo / 4;							//Variable local donde se guardan la cantidad de clicks en el PWM Rojo (USART2)
 
-			uint16_t pasos_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;
+			uint16_t pasos_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;		//Variable local donde se guardan los pasos dados en el Encoder
 
+			/*Mensaje a enviar después de reconocer cambios y actualizarse los datos*/
 			sprintf((char *)msg_buffer,
 			"--------------------------------------------------\r\n"
 			"ADC value = %u raw\r\n"
 			"ADC value = %.0f mV\r\n"
-			"Encoder dir: %s, value = %d\r\n"
+			"Encoder dir: %s, value = %u\r\n"
 			"UART value = %u clicks\r\n"
 			"--------------------------------------------------\r\n"
 			"\r\n",raw_adc, adc_value_mv, dir_str, pasos_encoder, clicks_rojo);
 
-			HAL_UART_Transmit(&huart2, msg_buffer, strlen((char *)msg_buffer), 200);
+			HAL_UART_Transmit(&huart2, msg_buffer, strlen((char *)msg_buffer), 200);		//Transmisión del mensaje
 
 			estado_actual = STATE_CHECK;
-
 
 			break;
 
@@ -431,7 +459,7 @@ static void tim1_pwm_Init(void){
 /*
  * tim2_encoder_Init
  * Configura el TIM2 (32 bits) en modo Encoder
- * Utiliza los canales 1 y 2 para las entradas DT (PA0) y CLK (PA1)
+ * Utiliza los canales 1 y 2 para las entradas CLK (PA0) y DT (PA1)
  */
 static void tim2_encoder_Init(void){
 
