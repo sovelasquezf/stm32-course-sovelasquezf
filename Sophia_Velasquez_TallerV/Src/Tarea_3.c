@@ -107,11 +107,11 @@ float adc_value_mv = 0.0f;			//Almacena el valor convertido por ADC en mV
 
 volatile uint16_t raw_usart = 0;	//Almacena el valor para la comunicación serial
 volatile uint8_t usart_done = 0;	//Bandera para la comunicación serial
-uint8_t rx_data = 0;				//Almacena el caracter recibido en la recepción
+volatile uint8_t rx_data = 0;		//Almacena el caracter recibido en la recepción
 
 volatile uint16_t raw_encoder = 0;	//Almacena el valor para el modo Encoder
 volatile uint16_t encoder_dir = 0;	//Se guarda el valor de la dirección del Encoder (CW = 0 y CCW = 1)
-char* dir_str = 0;					//Streing que indica la dirección usado en la transmisión
+char* dir_str = 0;					//String que indica la dirección usado en la transmisión
 
 uint8_t msg_buffer[256];			//Mensaje completo donde se muestran los valores actuales del equipo a medida que se van actualizando
 
@@ -270,7 +270,7 @@ int main(void){
 
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pwm_rojo);		//Se carga el valor del CCR al PWM del canal 2
 
-			HAL_UART_Receive_IT(&huart2, &rx_data, 1);					//Reactiva la interrupción de recepción UART para el siguiente byte
+			HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);		//Reactiva la interrupción de recepción UART para el siguiente byte
 
 			usart_done = 0;												//Se baja la bandera
 
@@ -302,7 +302,7 @@ int main(void){
 			uint16_t pasos_encoder = __HAL_TIM_GET_COUNTER(&htim2) / 4;		//Variable local donde se guardan los pasos dados en el Encoder
 
 			/*Mensaje a enviar después de reconocer cambios y actualizarse los datos*/
-			sprintf((char *)msg_buffer,
+			sprintf((char *) msg_buffer,
 			"--------------------------------------------------\r\n"
 			"ADC value = %u raw\r\n"
 			"ADC value = %.0f mV\r\n"
@@ -311,7 +311,7 @@ int main(void){
 			"--------------------------------------------------\r\n"
 			"\r\n",raw_adc, adc_value_mv, dir_str, pasos_encoder, clicks_rojo);
 
-			HAL_UART_Transmit(&huart2, msg_buffer, strlen((char *)msg_buffer), 200);		//Transmisión del mensaje
+			HAL_UART_Transmit(&huart2, msg_buffer, strlen((char *) msg_buffer), 200);		//Transmisión del mensaje
 
 			estado_actual = STATE_CHECK;
 
@@ -370,7 +370,7 @@ static void SystemClock_Config(void){
 
 /*
  * gpio_Init
- * Configura PH1 como salida push-pull (Led D2 de la tarjeta nucleo)
+ * Configura PH1 como salida Push-Pull (Led D2 de la tarjeta nucleo)
  */
 static void gpio_Init(void){
 
@@ -640,7 +640,7 @@ static void usart2_Init(void){
 	HAL_NVIC_EnableIRQ(USART2_IRQn);
 
 	/*Habilitar la interrupción para la recepción de datos*/
-	HAL_UART_Receive_IT(&huart2, &rx_data, 1);	//El dato se guarda en la variable rx_data de a byte
+	HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);	//El dato se guarda en la variable rx_data de a byte
 
 }
 
