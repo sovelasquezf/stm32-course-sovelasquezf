@@ -70,12 +70,15 @@ uint8_t msg_buffer[256];
 /*Prototipo de funciones privadas*/
 static void SystemClock_Config(void);
 static void gpio_Init(void);
+static void tim11_led_ok_Init(void);
 static void i2c1_display_Init(void);
 static void LCD_SendNibble(uint8_t nibble, uint8_t rs);
 static void LCD_SendCommand(uint8_t comando);
 static void LCD_Init(void);
-static void tim11_led_ok_Init(void);
+static void LCD_SetCursor(uint8_t fila, uint8_t columna);
+static void LCD_Print(char *texto);
 static void usart2_Init(void);
+static void mco1_Init(void);
 void Error_Handler(void);
 
 
@@ -87,11 +90,15 @@ int main(void){
 	HAL_Init();					//Inicializa HAL: SysTick, caché, agrupación de prioridades
 	SystemClock_Config();		//Configura el árbol de relojes: HSI a 16 MHz y se activa el PLL para trabajr con el procesador a 100 MHz
 	gpio_Init();
-	i2c1_display_Init();
-
-	LCD_Init();
 	tim11_led_ok_Init();
+
+	i2c1_display_Init();
+	LCD_Init();
+	LCD_SetCursor(0,0);
+	LCD_Print("Hola Sophia");
+
 	usart2_Init();
+	mco1_Init();
 
 
 
@@ -111,7 +118,7 @@ int main(void){
 /*
  * SystemClock_Config
  * Usa el oscilador interno HSI a 16 MHz
- * Sin PLL — configuración de reloj más simple posible
+ * Se configura el PLL a 100 MHz
  */
 static void SystemClock_Config(void){
 
@@ -119,27 +126,48 @@ static void SystemClock_Config(void){
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    /*HSI ya está encendido al resetear (Confirmar y usarlo)*/
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI;			//Oscilador Interno de Alta Velocidad (HSI)
+    /*Habilitar el reloj del periferico de power control*/
+    __HAL_RCC_PWR_CLK_ENABLE();
+
+	/*Subir el regulador a Scale 1 (Condición para que la frecuencia del HCLK máxima sea 100 MHz según el datasheet)*/
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+	/*Habilitar acceso al dominio de backup (requerido para tocar el LSE y el RTC)*/
+	HAL_PWR_EnableBkUpAccess();
+
+    /*HSI ya está encendido al resetear (Confirmar y usarlo) y del LSE para ser usado en MCO1 y el RTC*/
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI |		//Oscilador Interno de Alta Velocidad (HSI)
+    										RCC_OSCILLATORTYPE_LSE;			//Oscilador Externo de Baja Velocidad (LSE)
     RCC_OscInitStruct.HSIState            = RCC_HSI_ON;						//Encendido del HSI
     RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;		//Calibración por defecto de fábrica para el HSI
-    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_NONE;					//Desactivación del PLL para trabajar a 16 MHz
+    RCC_OscInitStruct.LSEState  	 	  = RCC_LSE_ON;						//Encendido del LSE
+
+    /*Configuración del PLL a 100 MHz*/
+    RCC_OscInitStruct.PLL.PLLState  = RCC_PLL_ON;				//Activación del PLL
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;		//Selecciona el HSI como fuente para el PLL
+	RCC_OscInitStruct.PLL.PLLM      = 16;						//Divisor en 16 = 1 MHz
+	RCC_OscInitStruct.PLL.PLLN      = 200;						//Multiplicador en 200 = 200 MHz
+	RCC_OscInitStruct.PLL.PLLP      = RCC_PLLP_DIV2;			//Divisor en 2 = 100 MHz
 
     /*Cargando la configuración en los registros FSR del MCU*/
     HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
-    /*Seleccionar HSI como SYSCLK (Todos los divisores de bus en 1)*/
-    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK |	//Configuración simultánea de los relojes
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /*Seleccionar PLL como SYSCLK*/
+    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK |		//Configuración simultánea de los relojes
                                        RCC_CLOCKTYPE_HCLK   |
                                        RCC_CLOCKTYPE_PCLK1  |
                                        RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_HSI;	//Reloj del sistema (SYSCLK) = 16 MHz
-    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;   		//Divisor del AHB (HCLK) en 1 = 16 MHz
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;     		//Divisor del APB1 (PCLK1) en 1 = 16 MHz
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;     		//Divisor del APB2 (PCLK2) en 1 = 16 MHz
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;		//Reloj del sistema (SYSCLK) = 100 MHz
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;   			//Divisor del AHB (HCLK) en 1 = 100 MHz
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;     			//Divisor del APB1 (PCLK1) en 2 = 50 MHz
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;     			//Divisor del APB2 (PCLK2) en 1 = 100 MHz
 
-    /*FLASH_LATENCY_0 = cero wait states, correcto para 16 MHz*/
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0);
+    /*FLASH_LATENCY_3 = three wait states, correcto para 100 MHz*/
+    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3);
 
 }
 
@@ -149,6 +177,7 @@ static void SystemClock_Config(void){
  * Configura PH1 como salida Push-Pull (Led D2 de la tarjeta nucleo)
  */
 static void gpio_Init(void){
+
 
 	/*Inicialización de estructuras*/
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -167,8 +196,40 @@ static void gpio_Init(void){
 
 }
 
+
+/*
+ * tim11_led_ok_Init
+ * Configura TIM11 para generar un evento de actualización cada 250 ms
+ */
+static void tim11_led_ok_Init(void){
+
+	/*Configuración del TIM11*/
+	/*Habilitar reloj de TIM11 en el bus APB2*/
+	__HAL_RCC_TIM11_CLK_ENABLE();
+
+	/*Configuración general del TIM11*/
+	htim11.Instance				  = TIM11;
+	htim11.Init.Prescaler		  = 50000 - 1;							//Configurando el Prescaler a 0.5 ms (100 MHz / 50 kHz = 2 kHz)
+	htim11.Init.CounterMode 	  = TIM_COUNTERMODE_UP;					//Conteo ascendente
+	htim11.Init.Period 			  = 500 - 1;							//Periodo de 0.5 ms * 500 = 250 ms
+	htim11.Init.ClockDivision 	  = TIM_CLOCKDIVISION_DIV1;				//División en 1 = 250 ms
+	htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;		//Deshabilita la precarga automática
+
+	/*Cargando la configuración en los registros FSR del MCU*/
+	HAL_TIM_Base_Init(&htim11);
+
+	/*Registrando la interrupción en el NVIC para la recepción*/
+	HAL_NVIC_EnableIRQ(TIM1_TRG_COM_TIM11_IRQn);
+
+	/*Inicialización del TIM11 en modo de interrupción Update Event Interrupt (UEI)*/
+	HAL_TIM_Base_Start_IT(&htim11);
+
+}
+
+
 /*
  * i2c1_display_Init
+ * Configura los pines PB8 (SCL) y PB9 (SDA) para el uso de I2C del display
  */
 static void i2c1_display_Init(void){
 
@@ -216,6 +277,7 @@ static void i2c1_display_Init(void){
 
 /*
  * LCD_SendNibble
+ *
  */
 static void LCD_SendNibble(uint8_t nibble, uint8_t rs){
 
@@ -319,39 +381,77 @@ static void LCD_Init(void){
 	LCD_SendCommand(0x06);		//0x06 = 00000110
 
 	/*Display on: Display encendido (D = 1), cursor apagado (C = 0) y blink apagado (B = 0)*/
-	LCD_SendCommand(0x08);		//0x28 = 00001100
+	LCD_SendCommand(0x0C);		//0x0C = 00001100
 
 }
 
 
 /*
- * tim11_led_ok_Init
- * Configura TIM11 para generar un evento de actualización cada 250 ms
+ * LCD_SetCursor
+ * Posiciona el cursor en una fila (0-3) y columna (0-19) especifica
+ * Usa las direcciones base de cada linea segun el mapa DDRAM del datasheet
  */
-static void tim11_led_ok_Init(void){
+static void LCD_SetCursor(uint8_t fila, uint8_t columna){
 
-	/*Configuración del TIM11*/
-	/*Habilitar reloj de TIM11 en el bus APB2*/
-	__HAL_RCC_TIM11_CLK_ENABLE();
+	uint8_t direccion;		//Dirección = address línea + # de columna
 
-	/*Configuración general del TIM11*/
-	htim11.Instance				 = TIM11;
-	htim11.Init.Prescaler		  = 16000 - 1;							//Configurando el Prescaler a 1 ms (16 MHz / 16 kHz = 1 kHz)
-	htim11.Init.CounterMode 	  = TIM_COUNTERMODE_UP;					//Conteo ascendente
-	htim11.Init.Period 			 = 250 - 1;								//Periodo de 1 ms * 250 = 250 ms
-	htim11.Init.ClockDivision 	 = TIM_CLOCKDIVISION_DIV1;				//División en 1 = 250 ms
-	htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;		//Deshabilita la precarga automática
+	switch(fila){
 
-	/*Cargando la configuración en los registros FSR del MCU*/
-	HAL_TIM_Base_Init(&htim11);
+		case 0:
 
-	/*Registrando la interrupción en el NVIC para la recepción*/
-	HAL_NVIC_EnableIRQ(TIM1_TRG_COM_TIM11_IRQn);
+			direccion = LCD_LINE1 + columna;
 
-	/*Inicialización del TIM11 en modo de interrupción Update Event Interrupt (UEI)*/
-	HAL_TIM_Base_Start_IT(&htim11);
+			break;
+
+		case 1:
+
+			direccion = LCD_LINE2 + columna;
+
+			break;
+
+		case 2:
+
+			direccion = LCD_LINE3 + columna;
+
+			break;
+
+		case 3:
+
+			direccion = LCD_LINE4 + columna;
+
+			break;
+
+		default:
+
+			direccion = LCD_LINE1 + columna;
+
+			break;		//Va a la línea 1 en caso de llamar a una fila diferente de 0 a 3
+
+	}
+
+	/*Envío de al dirección con el comando Set DDRAM address*/
+	LCD_SendCommand(0x80 | direccion);		//0x80 = 10000000
 
 }
+
+
+/*
+ * LCD_Print
+ * Escribe una cadena de texto completa a partir de la posicion actual del cursor,
+ * Envía cada caracter con LCD_SendData()
+ */
+static void LCD_Print(char *texto){
+
+	while(*texto != '\0'){
+
+		LCD_SendData((uint8_t)(*texto));
+
+		texto++;
+
+	}
+
+}
+
 
 
 /*
@@ -406,6 +506,35 @@ static void usart2_Init(void){
 
 	/*Habilitar la interrupción para la recepción de datos*/
 	HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);		//El dato se guarda en la variable rx_data de a byte
+
+}
+
+
+/*
+ * mco1_Init
+ * Configura el MCO1 como salida para leer el HSI, LSE o PLL (Según se requiera) en PA8
+ */
+static void mco1_Init(void){
+
+	/*Configuración de los pines*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef GPIO_mco1_Init = {0};
+
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general de los pines: PA8*/
+	GPIO_mco1_Init.Pin	     = GPIO_PIN_8;
+	GPIO_mco1_Init.Mode 	 = GPIO_MODE_AF_PP;				//Establece los pines en modo función alternativa
+	GPIO_mco1_Init.Pull  	 = GPIO_NOPULL;					//Desactiva resistencias de Pull-Up o Pull-Down
+	GPIO_mco1_Init.Speed	 = GPIO_SPEED_FREQ_VERY_HIGH;	//Configuración de velocidad como muy alta para evitar distorsiones
+	GPIO_mco1_Init.Alternate = GPIO_AF0_MCO;					//Función alternativa correspondiente a AF0 en MCO1
+
+	/*Cargar la configuracion en los registros FSR del MCU*/
+	HAL_GPIO_Init(GPIOA, &GPIO_mco1_Init);
+
+	/*Inicialización del MCO1*/
+	HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);		//Se redirige la señal del Oscilador Interno de Alta Velocidad (HSI) a PA8
 
 }
 
