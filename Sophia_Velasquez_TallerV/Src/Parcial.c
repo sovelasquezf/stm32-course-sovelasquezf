@@ -31,16 +31,29 @@
 #define LCD_COMANDO  0
 #define LCD_DATO     1
 
+/*Contraseña o firma para la inicialización del RTC*/
+#define RTC_BACKUP_PSW  1111		//
+
+
 
 TIM_HandleTypeDef htim11;				//TIM11 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+ADC_HandleTypeDef hadc1 = {0};		//ADC1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
 I2C_HandleTypeDef hi2c1;				//I2C1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
 UART_HandleTypeDef huart2 = {0};		//USART2 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
 
+RTC_HandleTypeDef hrtc;					//RTC handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
 
 /*Variables*/
+/*Variables usadas para la conversión ADC*/
+volatile uint16_t raw_adc_x = 0;		//Almacena el valor de x para la conversión ADC
+volatile uint16_t raw_adc_y = 0;		//Almacena el valor de y para la conversión ADC
+volatile uint16_t adc_secuence = 0;		//Bandera para la secuencia en la conversión ADC (En 0: Conversión a hacer es x | En 1: Conversión a hacer es y)
 
+/*Variables usadas para la transmisión del display*/
 uint8_t lcd_backlight = LCD_BACKLIGHT;		//Controla el estado de la luz de fondo del LCD
 
 /*Mensaje inicial con las indicaciones para la recepción*/
@@ -58,9 +71,9 @@ uint8_t init_Msg[] =
 "\r\n";
 
 /*Variable usadas para al comunicación serial*/
-volatile uint16_t raw_usart = 0;	//Almacena el valor para la comunicación serial
-volatile uint8_t usart_done = 0;	//Bandera para la comunicación serial
-volatile uint8_t rx_data = 0;		//Almacena el caracter recibido en la recepción
+volatile uint16_t raw_usart = 0;		//Almacena el valor para la comunicación serial
+volatile uint8_t usart_done = 0;		//Bandera para la comunicación serial
+volatile uint8_t rx_data = 0;			//Almacena el caracter recibido en la recepción
 
 /*Mensaje completo donde se muestran los valores actuales del equipo a medida que se van actualizando*/
 uint8_t msg_buffer[256];
@@ -71,6 +84,7 @@ uint8_t msg_buffer[256];
 static void SystemClock_Config(void);
 static void gpio_Init(void);
 static void tim11_led_ok_Init(void);
+static void adc_Init(void);
 static void i2c1_display_Init(void);
 static void LCD_SendNibble(uint8_t nibble, uint8_t rs);
 static void LCD_SendCommand(uint8_t comando);
@@ -78,8 +92,10 @@ static void LCD_Init(void);
 static void LCD_SetCursor(uint8_t fila, uint8_t columna);
 static void LCD_Print(char *texto);
 static void usart2_Init(void);
+static void rtc_Init(void);
+static void rtc_Initial_Setting(void);
 static void mco1_Init(void);
-void Error_Handler(void);
+
 
 
 
@@ -91,6 +107,7 @@ int main(void){
 	SystemClock_Config();		//Configura el árbol de relojes: HSI a 16 MHz y se activa el PLL para trabajr con el procesador a 100 MHz
 	gpio_Init();
 	tim11_led_ok_Init();
+	adc_Init();
 
 	i2c1_display_Init();
 	LCD_Init();
@@ -98,6 +115,9 @@ int main(void){
 	LCD_Print("Hola Sophia");
 
 	usart2_Init();
+	rtc_Init();
+	rtc_Initial_Setting();
+
 	mco1_Init();
 
 
@@ -151,10 +171,6 @@ static void SystemClock_Config(void){
 
     /*Cargando la configuración en los registros FSR del MCU*/
     HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-        Error_Handler();
-    }
 
     /*Seleccionar PLL como SYSCLK*/
     RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_SYSCLK |		//Configuración simultánea de los relojes
@@ -228,6 +244,78 @@ static void tim11_led_ok_Init(void){
 
 
 /*
+ * adc_Init
+ * Configuración del ADC para PA5(CH5) y PA6(CH6)
+ */
+static void adc_Init(void){
+
+	/*Configuración de PA5 y PA6*/
+	/*Inicialización de estructuras*/
+	GPIO_InitTypeDef GPIO_Init_adc_ch5_ch6 = {0};
+
+	/*Habilitar reloj de GPIOA en el bus AHB1*/
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	/*Configuración general del pin*/
+	GPIO_Init_adc_ch5_ch6.Pin  = GPIO_PIN_5 |
+								 GPIO_PIN_6;
+	GPIO_Init_adc_ch5_ch6.Mode = GPIO_MODE_ANALOG;		//Configura el pin en modo analógico
+	GPIO_Init_adc_ch5_ch6.Pull = GPIO_NOPULL;			//Desactiva resistencias de Pull-Up o Pull-Down
+
+	/*Cargar la configuracion en los registros FSR del MCU*/
+	HAL_GPIO_Init(GPIOA, &GPIO_Init_adc_ch5_ch6);
+
+	/*Configuración del ADC*/
+	/*Habilitar reloj de ADC en el bus APB2*/
+	__HAL_RCC_ADC1_CLK_ENABLE();
+
+	/*Configuración general del ADC*/
+	hadc1.Instance					 = ADC1;
+	hadc1.Init.ClockPrescaler		 = ADC_CLOCK_SYNC_PCLK_DIV8;		//División 8: 100 MHz / 8 = 12.5 MHz
+	hadc1.Init.Resolution			 = ADC_RESOLUTION_12B;				//Resolución 12 bit (4096 divisiones)
+	hadc1.Init.DataAlign			 = ADC_DATAALIGN_RIGHT;
+	hadc1.Init.ScanConvMode			 = ENABLE;							//Habilitado por el eso de más de un solo canal de conversión ADC
+	hadc1.Init.EOCSelection			 = ADC_EOC_SINGLE_CONV;				//Conversión finaliza al terminal el canal
+	hadc1.Init.ContinuousConvMode	 = ENABLE;
+	hadc1.Init.NbrOfConversion 		 = 2;								//Hay dos canales haciendo conversión ADC
+	hadc1.Init.DiscontinuousConvMode = DISABLE;
+	hadc1.Init.ExternalTrigConv		 = ADC_SOFTWARE_START;				//
+	hadc1.Init.DMAContinuousRequests = DISABLE;
+
+	/*Cargar la configuracion en los registros FSR del MCU */
+	HAL_ADC_Init(&hadc1);
+
+	/*Configuración de los canales 5 y 6*/
+	/*Inicialización de estructuras*/
+	ADC_ChannelConfTypeDef adc_ch5 = {0};
+	ADC_ChannelConfTypeDef adc_ch6 = {0};
+
+	/*Configuración general del canal 5*/
+	adc_ch5.Channel		 = ADC_CHANNEL_5;
+	adc_ch5.Rank		 = 1;							//Primera  conversión a hacer
+	adc_ch5.SamplingTime = ADC_SAMPLETIME_56CYCLES;		//Cantidad de ciclos a pasar para hacer el muestreo (carga del capacitor)
+	adc_ch5.Offset		 = 0;
+
+	/*Configuración general del canal 6*/
+	adc_ch6.Channel		 = ADC_CHANNEL_6;
+	adc_ch6.Rank		 = 2;							//Segunda conversión a hacer
+	adc_ch6.SamplingTime = ADC_SAMPLETIME_56CYCLES;		//Cantidad de ciclos a pasar para hacer el muestreo (carga del capacitor)
+	adc_ch6.Offset		 = 0;
+
+	/*Cargar las configuraciones en los registros FSR del MCU */
+	HAL_ADC_ConfigChannel(&hadc1, &adc_ch5);
+	HAL_ADC_ConfigChannel(&hadc1, &adc_ch6);
+
+	/*Registrar la interrupción en el NVIC*/
+	HAL_NVIC_EnableIRQ(ADC_IRQn);
+
+	/*Inicialización del ADC1*/
+	HAL_ADC_Start_IT(&hadc1);
+
+}
+
+
+/*
  * i2c1_display_Init
  * Configura los pines PB8 (SCL) y PB9 (SDA) para el uso de I2C del display
  */
@@ -266,12 +354,8 @@ static void i2c1_display_Init(void){
 	hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;		//Desactiva el broadcast (Llamada general)
 	hi2c1.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;			//Permite Clock Stretching (Estiramiento del reloj) para dar tiempo de procesamiento al sensor
 
-	/*Inicialización */
-    if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
-
-        Error_Handler();
-
-    }
+	/*Inicialización del I2C*/
+	HAL_I2C_Init(&hi2c1);
 
 }
 
@@ -511,6 +595,73 @@ static void usart2_Init(void){
 
 
 /*
+ * rtc_Init
+ * Configura el RTC interno usando el LSE (32.768kHz) como fuente de reloj
+ * Prescalers calculados para llegar a 1Hz: 32768 / 128 / 256 = 1Hz
+ */
+static void rtc_Init(void){
+
+	/*Seleccionar LSE como fuente de reloj del RTC*/
+	__HAL_RCC_RTC_CONFIG(RCC_RTCCLKSOURCE_LSE);
+
+	/*Habilitar reloj de RTC en el bus APB1*/
+	__HAL_RCC_RTC_ENABLE();
+
+	/*Configuracion general del RTC*/
+	hrtc.Instance            = RTC;
+	hrtc.Init.HourFormat     = RTC_HOURFORMAT_24;
+	hrtc.Init.AsynchPrediv   = 128 - 1;							//Divisor asincrono: 32768 Hz / 128 = 256 Hz
+	hrtc.Init.SynchPrediv    = 256 - 1;							//Divisor sincrono: 256 Hz / 256 = 1 Hz
+	hrtc.Init.OutPut         = RTC_OUTPUT_DISABLE;
+	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+	hrtc.Init.OutPutType     = RTC_OUTPUT_TYPE_OPENDRAIN;
+
+	/*Inicializacion*/
+	HAL_RTC_Init(&hrtc);
+
+}
+
+
+/*
+ * rtc_Set
+ * Configura hora y fecha solamente la primera vez que arranca el RTC
+ * Se usa un registro de backup alimentado por la bateria conectada a VBAT
+ * Debe tenerse en cuenta la "contraseña" para la inicialización del RTC
+ */
+static void rtc_Initial_Setting(void){
+
+	/*Inicialización de estructuras*/
+	RTC_TimeTypeDef RTC_Time = {0};
+	RTC_DateTypeDef RTC_Date = {0};
+
+	/*Verificar si el RTC ya fue inicializado antes*/
+	if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != RTC_BACKUP_PSW){		//Si la contraseña es la misma sigue contando normalmente, de lo contrario se inicializa nuevamente
+
+		/*Configuración inicial de la hora, se usa como referencia*/
+		RTC_Time.Hours   = 12;
+		RTC_Time.Minutes = 0;
+		RTC_Time.Seconds = 0;
+
+		/*Cargando la configuración en los registros FSR del MCU*/
+		HAL_RTC_SetTime(&hrtc, &RTC_Time, RTC_FORMAT_BIN);
+
+		/*Configuración inicial de la fecha, se usa como referencia*/
+		RTC_Date.WeekDay = RTC_WEEKDAY_MONDAY;
+		RTC_Date.Month   = RTC_MONTH_JULY;
+		RTC_Date.Date    = 27;
+		RTC_Date.Year    = 26;
+
+		/*Cargando la configuración en los registros FSR del MCU*/
+		HAL_RTC_SetDate(&hrtc, &RTC_Date, RTC_FORMAT_BIN);
+
+		/*Se guarda en el registro de backup la contraseña*/
+		HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, RTC_BACKUP_PSW);
+
+	}
+}
+
+
+/*
  * mco1_Init
  * Configura el MCO1 como salida para leer el HSI, LSE o PLL (Según se requiera) en PA8
  */
@@ -539,14 +690,6 @@ static void mco1_Init(void){
 }
 
 
-void Error_Handler(void){
-
-    while(1){
-
-    }
-
-}
-
 /*
  * HAL_TIM_PeriodElapsedCallback
  * Llamado automáticamente por HAL_TIM_IRQHandler() cada vez que un evento de actualización del timer se dispara
@@ -559,6 +702,35 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
         HAL_GPIO_TogglePin(GPIOH, GPIO_PIN_1);
 
     }
+}
+
+
+/*
+ * HAL_ADC_ConvCpltCallback
+ * Callback de la conversión ADC
+ */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+
+	if(hadc->Instance == ADC1){
+
+		if(adc_secuence == 0){
+
+			raw_adc_x = HAL_ADC_GetValue(hadc);
+
+			adc_secuence = 1;
+
+		}
+
+	else{
+
+			raw_adc_y = HAL_ADC_GetValue(hadc);
+
+			adc_secuence = 0;
+
+		}
+
+	}
+
 }
 
 
