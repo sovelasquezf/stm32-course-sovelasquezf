@@ -3,7 +3,72 @@
  *
  *  Created on: Jul 21, 2026
  *      Author: Sophia Alejandra Velásquez Fuentes - sovelasquezf@unal.edu.co
- *       Brief:
+ *       Brief: Pantalla LDC con Joystick y RTC interno
+ *
+ *
+ * Distribución de los Timers - Pines
+ *
+ *  - Comunicación Serial - AF07:
+ *  	CH3 -> PA2: USART2_TX (Transmisión)
+ *  	CH4 -> PA3: USART2_RX (Recepción)
+ *
+ *  - Conversión analogo-digital (Joystick):
+ *  	X -> PA5: ADC1_5
+ *  	Y -> PA6: ADC1_6
+ *
+ *  - I2C - AF04:
+ *  	SCL -> PA8: I2C1_SCL
+ *  	SDA -> PA9: I2C1_SDA
+ *
+ *  - Led OK (TIM4): PH1
+ *
+ * 	- MCO_1 - AF00: PA8
+ *
+ *
+ * Descripción del Código
+ *
+ * El sistema realiza el sensado de las señales analógicas producidas por
+ * un joystick (en X y Y), cuyos datos son visualizados una pantalla LCD
+ * a través del bus I2C. La conversión de datos analógicos se gestiona
+ * mediante el convertidor ADC1, mientras que el puerto serial USART2
+ * permite la transmisión de comandos e información de estado. Adicional
+ * a esto se usan otros 2 periféricos: el periférico RTC (Real-Time Clock)
+ * para mostrar la fecha y hora y la salida de reloj MCO1 (Microcontroller
+ * Clock Output) para monitorear las señales del HSI, LSE y PLL en el
+ * microcontrolador.
+ *
+ * - Lectura Analógica y Normalización (ADC en PA5 y PA6): El ADC1 realiza
+ * la conversión analógica-digital de dos canales para capturar la posición
+ * del joystick en los ejes X e Y. El cálculo muestra las lecturas en un
+ * rango de voltios (V) o en una escala normalizada (de -1.00 a 1.00).
+ *
+ * - Visualización e Interfaz (I2C en PB8 y PB9): La pantalla LCD actualiza
+ * periódicamente la información mostrada. Esta expone la fecha, la hora,
+ * datos de las lecturas normalizadas para X y Y y que señal está en la
+ * salida del MCO1, ubicando cada dato en una línea respectiva de la pantalla.
+ *
+ * - Comunicación Serial (USART2 en PA2 y PA3): El periférico USART2 recibe
+ * comandos desde la PC a 19200 bps, donde los caracteres H, L y P modifican
+ * la señal en MCO1, F alterna el formato de hora en el display y J el formato
+ * de visualización de la conversión ADC en el display y la terminal serial.
+ * Además, por transmisión se muestra cada cambio significativo en las variables
+ * actualiza los datos enviados por la interfaz serial.
+ *
+ * - Gestión de Tiempo en Tiempo Real (RTC): Se procesa la hora, minutos y
+ * segundos del sistema para mantener un registro temporal continuo. Este
+ * tiene como fuente el cristal LSE (32.768 kHz) y usa una bateria externa
+ * que alimenta el resitro de Backup para mantener el conteo del tiempo sin
+ * importar los reinicios del microcontrolador.
+ *
+ * - Salida de reloj (MCO1 en PA8): Se usa para direccionar y chequear las
+ * señales de reloj presentes en el sistema, esta fuente se selecciona a
+ * voluntad.
+ *
+ * En paralelo, el TIM11 genera por interrupción un parpadeo permanente de
+ * seguridad en el pin PH1 cada 250 ms como muestra del funcionamiento
+ * correcto de todo el sistema.
+ *
+ *
  */
 
 #include <stm32f4xx_hal.h>
@@ -14,6 +79,18 @@
 #include <stdlib.h>
 
 
+TIM_HandleTypeDef htim11;				//TIM11 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+ADC_HandleTypeDef hadc1 = {0};			//ADC1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+I2C_HandleTypeDef hi2c1;				//I2C1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+UART_HandleTypeDef huart2 = {0};		//USART2 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+RTC_HandleTypeDef hrtc;					//RTC handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+
+
+/*Dirección de la pantalla LCD*/
 #define LCD_I2C_ADDR (0x22 << 1)
 
 /*Posiciones de bits según el mapeo del PCF8574*/
@@ -33,19 +110,7 @@
 #define LCD_DATO     1
 
 /*Contraseña o firma para la inicialización del RTC*/
-#define RTC_BACKUP_PSW  1111		//
-
-
-
-TIM_HandleTypeDef htim11;				//TIM11 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
-
-ADC_HandleTypeDef hadc1 = {0};			//ADC1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
-
-I2C_HandleTypeDef hi2c1;				//I2C1 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
-
-UART_HandleTypeDef huart2 = {0};		//USART2 handle debe ser global para que stm32f4xx_it.c pueda acceder a el
-
-RTC_HandleTypeDef hrtc;					//RTC handle debe ser global para que stm32f4xx_it.c pueda acceder a el
+#define RTC_BACKUP_PSW  1111		//Debe cambiarse para volver a configurar los valores del RTC sin quitar la alimentación externa
 
 
 /*Variables*/
@@ -68,29 +133,27 @@ volatile uint16_t raw_adc_x = 0;		//Almacena el valor de x para la conversión A
 volatile uint16_t raw_adc_y = 0;		//Almacena el valor de y para la conversión ADC
 volatile uint16_t adc_secuence = 0;		//Bandera para la secuencia en la conversión ADC (En 0: Conversión a hacer es x | En 1: Conversión a hacer es y)
 volatile uint16_t adc_done = 0;			//Bandera para la conversión ADC
+volatile uint32_t last_adc = 0;			//Valor para contabilizar la ultima conversión
 
 /*Variable usadas para al comunicación serial*/
-volatile uint8_t usart_done = 0;		//Bandera para la comunicación serial
-volatile uint8_t rx_data = 0;			//Almacena el caracter recibido en la recepción
+volatile uint8_t usart_done = 0;				//Bandera para la comunicación serial
+volatile uint8_t rx_data = 0;					//Almacena el caracter recibido en la recepción
+volatile uint8_t  joystick_formato = 0;			//En 0: Voltaje en V | En 1: Vector normalizado
+char* mco_actual = "HSI";   					//Texto de la señal activa en MCO1
 
 /*Variable usadas para comparar el esatdo actual del Joystick*/
-volatile uint16_t actual_x = 0;   //Ultimo valor de X mostrado (para comparar cambios significativos)
-volatile uint16_t actual_y = 0;   //Ultimo valor de Y mostrado (para comparar cambios significativos)
+volatile uint16_t actual_x = 0;		//Ultimo valor de X mostrado (para comparar cambios significativos)
+volatile uint16_t actual_y = 0;  	//Ultimo valor de Y mostrado (para comparar cambios significativos)
 
 /*Variables usadas para la transmisión del display*/
-uint8_t lcd_backlight = LCD_BACKLIGHT;		//Controla el estado de la luz de fondo del LCD
+uint8_t lcd_backlight = LCD_BACKLIGHT;			//Controla el estado de la luz de fondo del LCD
+volatile uint8_t update_display_flag = 0;		//Bandera para la actualización del LCD
 
-volatile uint8_t  rtc_formato = 0;   				//En 0: 24h | En 1: 12h
-volatile uint8_t  rtc_ultimo_segundo = 60;
-volatile uint8_t  joystick_formato = 0;				//En 0: Voltaje en V | En 1: vector normalizado
-char* mco_actual = "HSI";   	//Texto de la señal activa en MCO1
-
-RTC_TimeTypeDef hora_actual = {0};
-RTC_DateTypeDef fecha_actual = {0};
-
-/*Variables de Control de Tiempo (Timers de la FSM)*/
-uint32_t last_adc = 0;
-
+/*Variable usadas para la actualización en pantalla del RTC*/
+volatile uint8_t  rtc_formato = 0;   			//En 0: 24h | En 1: 12h
+volatile uint8_t  rtc_ultimo_segundo = 60;		//Diferente a los valores que puede tomar segundos
+RTC_TimeTypeDef hora_actual = {0};				//Almacen la hora en el sistema
+RTC_DateTypeDef fecha_actual = {0};				//Almacena la fecha en el sistema
 
 /*Mensaje completo donde se muestran los valores actuales del equipo a medida que se van actualizando*/
 uint8_t msg_buffer[256];
@@ -101,14 +164,12 @@ char lcd_linea1[21] = "Hora: --:--:--";			//Buffer para la fila 1
 char lcd_linea2[21] = "X:---- Y:----";			//Buffer para la fila 2
 char lcd_linea3[21] = "MCO1: ---";				//Buffer para la fila 3
 
-// Bandera global para saber si debemos actualizar la pantalla
-volatile uint8_t update_display_flag = 0;
 
 /*Implementación FSM*/
 typedef enum{
-	STATE_IDLE,             // Director de tráfico (espera eventos)
-	STATE_READ_DATA,
-	STATE_UPDATE_DISPLAY    // ÚNICO lugar donde se escribe en la LCD (evita parpadeos)
+	STATE_IDLE,             	//Verifica el cambio en algún periférico con las banderas o conteos
+	STATE_READ_DATA,			//Lee valores y decide si se debe actualizar la pantalla
+	STATE_UPDATE_DISPLAY		//Refresca en la pantalla los nuevos datos
 
 } FSM_STATE;
 
@@ -142,26 +203,26 @@ int main(void){
 	/*Inicialización de los bloques independientes*/
 	HAL_Init();					//Inicializa HAL: SysTick, caché, agrupación de prioridades
 	SystemClock_Config();		//Configura el árbol de relojes: HSI a 16 MHz y se activa el PLL para trabajar con el procesador a 100 MHz
-	gpio_Init();
-	tim11_led_ok_Init();
-	adc_Init();
-	i2c1_display_Init();
-	LCD_Init();
-	usart2_Init();
-	rtc_Init();
-	rtc_Initial_Setting();
-	mco1_Init();
+	gpio_Init();				//Configura PH1 (Led en la tarjeta nucleo
+	tim11_led_ok_Init();		//Configura TIM11: evento de actualización cada 250 ms
+
+	adc_Init();					//Configura PA5 y PA6 para ADC de 12 bits en modo escaneo de 2 canales
+	i2c1_display_Init();		//Configura los pines PB8 (SCL) y PB9 (SDA) para I2C1 a una velocidad estándar de 100 kHz
+	LCD_Init();					//Ejecuta la secuencia de comandos por I2C inicializar el controlador HD44780 (siguiendo al datasheet)
+	usart2_Init();				//Configura USART2 a 19200 bps (8N1) en modo asíncrono (UART) para transmisión (PA2) y recepción (PA3)
+	rtc_Init();					//Asigna el cristal LSE (32.768 kHz) como fuente del RTC
+	rtc_Initial_Setting();		//Configura la fecha y hora (lee el registro de Backup si está VBAT conectado)
+	mco1_Init();				//Habilita el pin PA8 para monitorear los relojes del sistema en osciloscopio
 
 	/*Transmisión del mensaje inicial (Instrucción con los caracteres específicos a usar)*/
 	HAL_UART_Transmit(&huart2, (uint8_t *) init_Msg, strlen((char *) init_Msg), 300);
 
+	/*Inicialización del ADC1*/
 	HAL_ADC_Start_IT(&hadc1);
 
-	// 3. Forzar una primera lectura para que la pantalla no inicie en blanco
-	update_display_flag = 1;
+	update_display_flag = 1;		//Fuerza la primera actualización del LCD para que la pantalla no quede en blanco
 
-	/* Inicializar timers */
-	last_adc = HAL_GetTick();
+	last_adc = HAL_GetTick();		//Comienza el conteo para empezar a medir el intervalo de muestreo del Joystick
 
 	while(1){
 
@@ -169,22 +230,22 @@ int main(void){
 
 		case STATE_IDLE:
 
-			if(usart_done == 1){
+			if(usart_done == 1){					//Verifica si llegó un nuevo carácter por recepción
 
 		        estado_actual = STATE_READ_DATA;
 
 		    }
 
-			else if (HAL_GetTick() - last_adc >= 250){
+			else if(HAL_GetTick() - last_adc >= 250){		//Verifica si cumplió el conteo para el muestreo del Joystick
 
-				last_adc = HAL_GetTick();
+				last_adc = HAL_GetTick();					//Vuelve a comenzar el conteo
 
-				HAL_ADC_Start_IT(&hadc1);
+				HAL_ADC_Start_IT(&hadc1);					//Reinicializa la conversión ADC
 
 			}
 
 
-			else if (adc_done == 1) {
+			else if(adc_done == 1){						//Verifica si el ADC terminó una conversión controlada por el software (ambos canales)
 
 				estado_actual = STATE_READ_DATA;
 
@@ -196,40 +257,40 @@ int main(void){
 
 			if(usart_done == 1){
 
-				command_process();
+				command_process();		//Ejecuta las modificaciones según el caracter que se haya recibido
 
-				usart_done = 0;             // ¡Muy importante! Bajamos la bandera
-				update_display_flag = 1;    // Hubo un cambio, pedimos actualizar pantalla
+				usart_done = 0;             //Se baja la bandera
+				update_display_flag = 1;    //Se alza la bandera para la actualización de la pantalla
 
-				HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);
+				HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);		//Reactiva la interrupción de recepción UART para el siguiente byte
 
 			}
 
 			if(adc_done == 1){
 
-				if(adc_process() == 1){
+				if(adc_process() == 1){			//Hay un cambio significativo en la conversión ADC
 
-					update_display_flag = 1; // FSM levanta la bandera
+					update_display_flag = 1; 	//Se alza la bandera para la actualización de la pantalla
 
 				}
 
-				adc_done = 0;
+				adc_done = 0;		//Se baja la bandera
 
 			}
 
-			if(rtc_process() == 1){
+			if(rtc_process() == 1){			//Hay un cambio en la hora
 
-				update_display_flag = 1;     // FSM levanta la bandera
+				update_display_flag = 1;    //Se alza la bandera para la actualización de la pantalla
 
 			}
 
-			if (update_display_flag == 1) {
+			if(update_display_flag == 1){
 
 				estado_actual = STATE_UPDATE_DISPLAY;
 
 			}
 
-			else {
+			else{		//No hay cambios que necesiten una actualización en la pantalla
 
 				estado_actual = STATE_IDLE;
 
@@ -239,22 +300,15 @@ int main(void){
 
 		case STATE_UPDATE_DISPLAY:
 
-		// 1. Llamamos a la superfunción que da formato a X/Y/MCO1, refresca la LCD y envía el UART
-			update_data();
+			update_data();		//Se transmite a la pantalla por I2C la nueva información
 
-			// 2. Bajamos la bandera porque ya cumplimos la tarea
-			update_display_flag = 0;
+			update_display_flag = 0;		//Se baja la bandera
 
-			// 3. Volvemos al estado de reposo a esperar el siguiente evento
 			estado_actual = STATE_IDLE;
 
 			break;
 
-
-
-		        } // Fin del switch
-
-
+		}
 
 	}
 
@@ -407,7 +461,7 @@ static void adc_Init(void){
 	hadc1.Init.ContinuousConvMode	 = DISABLE;
 	hadc1.Init.NbrOfConversion 		 = 2;								//Hay dos canales haciendo conversión ADC
 	hadc1.Init.DiscontinuousConvMode = DISABLE;
-	hadc1.Init.ExternalTrigConv		 = ADC_SOFTWARE_START;				//
+	hadc1.Init.ExternalTrigConv		 = ADC_SOFTWARE_START;
 	hadc1.Init.DMAContinuousRequests = DISABLE;
 
 	/*Cargar la configuracion en los registros FSR del MCU */
@@ -442,29 +496,29 @@ static void adc_Init(void){
 
 /*
  * adc_process
- * Compara las lecturas actuales del ADC con las anteriores.
- * Filtra el ruido eléctrico y solicita actualizar la pantalla si hay un cambio real.
+ * Compara las lecturas actuales del ADC con las anteriores
+ * Analiza los cambios calculados para decidir si son ruido o no
  */
 static uint8_t adc_process(void){
 
 	int diff_x = abs(raw_adc_x - actual_x);
 	int diff_y = abs(raw_adc_y - actual_y);
 
-	// Usamos if-else para evaluar el umbral y retornar el resultado
-	if(diff_x > 40 || diff_y > 40){
+	if(diff_x > 120 || diff_y > 120){			//Se verifica que si haya una diferencia mayor al 3% (120 unidades)
 
-		actual_x = raw_adc_x;
+		actual_x = raw_adc_x;		//Se sobreescriben los valores para la próxima comparación
 		actual_y = raw_adc_y;
 
-		return 1; // Sí hubo cambio
+		return 1;		//Hay un cambio significativo
 
 	}
 
 	else{
 
-		return 0; // No hubo cambio
+		return 0;		//Se descarta el cambio (ruido)
 
 	}
+
 }
 
 
@@ -514,19 +568,18 @@ static void i2c1_display_Init(void){
 
 /*
  * LCD_SendNibble
- *
+ * Empaqueta 4 bits de datos (nibble) y los bits de control en un solo byte que viaja por I2C
  */
 static void LCD_SendNibble(uint8_t nibble, uint8_t rs){
 
 	/*Limpieza de los bytes control: RS, RW, E y BL*/
 	uint8_t dato = (nibble & 0xF0) | LCD_BACKLIGHT | rs;		//0xF0 (11110000)
 
-	/*Envío con Enable en 0 (Deja el byte listo en el bus, en reposo)*/
+	/*Envío con Enable en 0 (se queda en reposo)*/
 	HAL_I2C_Master_Transmit(&hi2c1, LCD_I2C_ADDR, &dato, 1, 10);		//10 ms como limite de espera
 
-	/*Cambio del Enable a 1 (Pasa a nivel alto, el HD44780 empieza a "mirar" el dato)*/
+	/*Cambio del Enable a 1 (Pasa a nivel alto, el HD44780 empieza a leer el dato)*/
 	dato |= LCD_EN;
-
 	HAL_I2C_Master_Transmit(&hi2c1, LCD_I2C_ADDR, &dato, 1, 10);
 
 	/*Cambio del Enable a 0 (Pasa a nivel bajo, el HD44780 termina de leer el dato)*/
@@ -581,7 +634,7 @@ static void LCD_SendData(uint8_t caracter){
  * Ejecuta la secuencia de inicialización del HD44780 en modo 4 bits,
  * Se siguen las instrucciones dadas en el datasheet (Initializing by Instruction)
  * Debe llamarse una sola vez, antes de usar cualquier otra función del driver.
- * Después de los 3 envíos de 0x30 se lleva al modo 8 bits (Esperando el primer nibble de una nueva instrucción)
+ * Después de los 3 envíos de 0x30 se lleva al modo 4 bits (Esperando el primer nibble de una nueva instrucción)
  */
 static void LCD_Init(void){
 
@@ -777,37 +830,37 @@ static void command_process(void){
 
         case 'H':
 
-            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);
+            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);		//HSI: 16 MHz (divisor 1)
 
-            mco_actual = "HSI";
+            mco_actual = "HSI";		//Actualiza en la pantalla cual señal de reloj hay en la salida del PA8
 
             break;
 
         case 'L':
 
-            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_LSE, RCC_MCODIV_1);
+            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_LSE, RCC_MCODIV_1);		//LSE: 32 kHz (divisor 1)
 
-            mco_actual = "LSE";
+            mco_actual = "LSE";		//Actualiza en la pantalla cual señal de reloj hay en la salida del PA8
 
             break;
 
         case 'P':
 
-            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_PLLCLK, RCC_MCODIV_4);
+            HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_PLLCLK, RCC_MCODIV_4);		//PLL: 100 MHz (divisor 4 = 25 MHz)
 
-            mco_actual = "PLL";
+            mco_actual = "PLL";		//Actualiza en la pantalla cual señal de reloj hay en la salida del PA8
 
             break;
 
         case 'F':
 
-            rtc_formato ^= 1; 	// Alterna entre 0 y 1
+            rtc_formato ^= 1;		//Alterna entre 0 y 1 (cambio de 24h a 12h o viceversa)
 
             break;
 
         case 'J':
 
-            joystick_formato ^= 1; // Alterna entre 0 y 1
+            joystick_formato ^= 1;		//Alterna entre 0 y 1 (cambio de valor en V a normalizado o viceversa)
 
             break;
 
@@ -818,8 +871,8 @@ static void command_process(void){
 
 /*
  * rtc_Init
- * Configura el RTC interno usando el LSE (32.768kHz) como fuente de reloj
- * Prescalers calculados para llegar a 1Hz: 32768 / 128 / 256 = 1Hz
+ * Configura el RTC interno usando el LSE (32.768 kHz) como fuente de reloj
+ * Prescalers calculados para llegar a 1 Hz
  */
 static void rtc_Init(void){
 
@@ -857,7 +910,7 @@ static void rtc_Initial_Setting(void){
 	RTC_DateTypeDef RTC_Date = {0};
 
 	/*Verificar si el RTC ya fue inicializado antes*/
-	if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != RTC_BACKUP_PSW){		//Si la contraseña es la misma sigue contando normalmente, de lo contrario se inicializa nuevamente
+	if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != RTC_BACKUP_PSW){		//Si la contraseña es la misma sigue contando normalmente, de lo contrario se inicializa nuevamente
 
 		/*Configuración inicial de la hora, se usa como referencia*/
 		RTC_Time.Hours   = 19;
@@ -880,6 +933,7 @@ static void rtc_Initial_Setting(void){
 		HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, RTC_BACKUP_PSW);
 
 	}
+
 }
 
 
@@ -889,74 +943,75 @@ static void rtc_Initial_Setting(void){
  */
 static uint8_t rtc_process(void){
 
-    HAL_RTC_GetTime(&hrtc, &hora_actual, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(&hrtc, &fecha_actual, RTC_FORMAT_BIN);
+	/*Lectura de los registros con fecha y hora*/
+    HAL_RTC_GetTime(&hrtc, &hora_actual, RTC_FORMAT_BIN);		//Al leerse se bloquean los registros
+    HAL_RTC_GetDate(&hrtc, &fecha_actual, RTC_FORMAT_BIN);		//Llamar la fecha inmediatamnte desbloquea la hora
 
-    if(hora_actual.Seconds != rtc_ultimo_segundo){
+    if(hora_actual.Seconds != rtc_ultimo_segundo){		//Compara la hora actual
 
-        rtc_ultimo_segundo = hora_actual.Seconds;
+        rtc_ultimo_segundo = hora_actual.Seconds;		//Reescribe el valor para la próxima comparación
 
-        sprintf(lcd_linea0, "Fecha:%02d/%02d/%02d", fecha_actual.Date, fecha_actual.Month, fecha_actual.Year);
+        sprintf(lcd_linea0, "Fecha:%02d/%02d/%02d", fecha_actual.Date, fecha_actual.Month, fecha_actual.Year);		//Reescribe la información el buffer de la línea 0
 
-        if(rtc_formato == 0){
+        if(rtc_formato == 0){		//Formato de 24h (no se cambia nada)
 
-            sprintf(lcd_linea1, "Hora:%02d:%02d:%02d   ", hora_actual.Hours, hora_actual.Minutes, hora_actual.Seconds);
+            sprintf(lcd_linea1, "Hora:%02d:%02d:%02d   ", hora_actual.Hours, hora_actual.Minutes, hora_actual.Seconds);		//Reescribe la información el buffer de la línea 1
 
         }
 
-        else{
+        else{		//Formato de 12h
 
-            uint8_t h_12 = hora_actual.Hours % 12;
+            uint8_t h_12 = hora_actual.Hours;
             char* am_pm;
 
-            if (hora_actual.Hours >= 12) {
+            if (hora_actual.Hours >= 12) {		//Horas de la tarde
 
-                am_pm = "PM"; // Es pasado el mediodía (PM)
+                am_pm = "PM";
 
-                if (hora_actual.Hours == 12) {
+                if (hora_actual.Hours == 12) {		//Medio día (no cambia)
 
-                    h_12 = 12; // El mediodía se queda en 12
+                    h_12 = 12;
 
                 }
 
                 else {
 
-                    h_12 = hora_actual.Hours - 12; // A las 13:00, 14:00, etc., le restamos 12
+                    h_12 = hora_actual.Hours - 12;		//Se restan las 12 horas para el formato
 
                 }
 
             }
 
-            else {
+            else {		//Horas de la mañana
 
-                am_pm = "AM"; // Es antes del mediodía (AM)
+                am_pm = "AM";
 
                 if (hora_actual.Hours == 0) {
 
-                    h_12 = 12; // La medianoche (00:00) se muestra como 12
+                    h_12 = 12;		//Media noche
 
                 }
 
                 else {
 
-                    h_12 = hora_actual.Hours; // De la 1:00 a las 11:00 se queda igual
+                    h_12 = hora_actual.Hours;		//No se cambian
 
                 }
 
             }
 
 
-            sprintf(lcd_linea1, "Hora:%02d:%02d:%02d %s", h_12, hora_actual.Minutes, hora_actual.Seconds, am_pm);
+            sprintf(lcd_linea1, "Hora:%02d:%02d:%02d %s", h_12, hora_actual.Minutes, hora_actual.Seconds, am_pm);		//Reescribe la información el buffer de la línea 1
 
         }
 
-        return 1; // El segundo cambió
+        return 1;		//Hay un cambio
 
     }
 
     else {
 
-        return 0; // Sigue en el mismo segundo
+        return 0; 		//Sigue en el mismo segundo
 
     }
 
@@ -972,40 +1027,38 @@ static void update_data(void){
 	char valor_x[16];
 	char valor_y[16];
 
-	/* 1. Formatear los datos del Joystick para UART y LCD simultáneamente */
-	if (joystick_formato == 0) {
+	if(joystick_formato == 0){		//FOrmato en V
 
-		float v_x = ((3.3f / 4095.0f) * (float) raw_adc_x);
-		float v_y = ((3.3f / 4095.0f) * (float) raw_adc_y);
+		float v_x = ((3.3f / 4095.0f) * (float) raw_adc_x);		//Conversión del valor raw adc de X en un valor de V
+		float v_y = ((3.3f / 4095.0f) * (float) raw_adc_y);		//Conversión del valor raw adc de Y en un valor de V
 
+		/*Reescribiendo los valores con un decimal*/
 		sprintf(valor_x,"%.1f V", v_x);
 		sprintf(valor_y,"%.1f V", v_y);
 
-		// Actualizamos también el buffer de la LCD para la línea 2
-		sprintf(lcd_linea2, "X:%3.1f V Y:%3.1f V", v_x, v_y);
+		sprintf(lcd_linea2, "X:%3.1f V Y:%3.1f V", v_x, v_y);		//Reescribe la información el buffer de la línea 2
 
 	}
 
-	else {
+	else{
 
-		float norm_x = ((float) raw_adc_x - 2048.0f) / 2048.0f;
-		float norm_y = ((float) raw_adc_y - 2048.0f) / 2048.0f;
+		float norm_x = ((float) raw_adc_x - 2048.0f) / 2048.0f;		//Conversión del valor raw adc de X normalizado
+		float norm_y = ((float) raw_adc_y - 2048.0f) / 2048.0f;		//Conversión del valor raw adc de Y normalizado
 
+		/*Reescribiendo los valores con dos decimales*/
 		sprintf(valor_x,"%.2f", norm_x);
 		sprintf(valor_y,"%.2f", norm_y);
 
-		// Actualizamos el buffer de la LCD
-		sprintf(lcd_linea2, "X:%5.2f Y:%5.2f", norm_x, norm_y);
+		sprintf(lcd_linea2, "X:%5.2f Y:%5.2f", norm_x, norm_y);		//Reescribe la información el buffer de la línea 2
 
 	}
 
-	// La línea 3 (MCO1) se puede actualizar aquí directamente
-	sprintf(lcd_linea3, "MCO1:%s", mco_actual);
+	sprintf(lcd_linea3, "MCO1:%s", mco_actual);		//Reescribe la información el buffer de la línea 3
 
-	/* 2. Actualizar físicamente la pantalla LCD */
+	/*Actualización de la pantalla LCD*/
 	LCD_Refresh();
 
-	/* 3. Armar y enviar el mensaje UART */
+	/*Mensaje a enviar después de reconocer cambios y actualizarse los datos*/
 	sprintf((char*) msg_buffer,
 	"---------------------\r\n"
 	" Datos actuales\r\n"
@@ -1015,6 +1068,7 @@ static void update_data(void){
 	"----------------------\r\n"
 	"\r\n", valor_x, valor_y, mco_actual);
 
+	/*Transmisión del mensaje*/
 	HAL_UART_Transmit(&huart2, msg_buffer, strlen((char*) msg_buffer), 100);
 
 }
@@ -1035,16 +1089,16 @@ static void mco1_Init(void){
 
 	/*Configuración general de los pines: PA8*/
 	GPIO_mco1_Init.Pin	     = GPIO_PIN_8;
-	GPIO_mco1_Init.Mode 	 = GPIO_MODE_AF_PP;				//Establece los pines en modo función alternativa
-	GPIO_mco1_Init.Pull  	 = GPIO_NOPULL;					//Desactiva resistencias de Pull-Up o Pull-Down
-	GPIO_mco1_Init.Speed	 = GPIO_SPEED_FREQ_VERY_HIGH;	//Configuración de velocidad como muy alta para evitar distorsiones
+	GPIO_mco1_Init.Mode 	 = GPIO_MODE_AF_PP;					//Establece los pines en modo función alternativa
+	GPIO_mco1_Init.Pull  	 = GPIO_NOPULL;						//Desactiva resistencias de Pull-Up o Pull-Down
+	GPIO_mco1_Init.Speed	 = GPIO_SPEED_FREQ_VERY_HIGH;		//Configuración de velocidad como muy alta para evitar distorsiones
 	GPIO_mco1_Init.Alternate = GPIO_AF0_MCO;					//Función alternativa correspondiente a AF0 en MCO1
 
 	/*Cargar la configuracion en los registros FSR del MCU*/
 	HAL_GPIO_Init(GPIOA, &GPIO_mco1_Init);
 
 	/*Inicialización del MCO1*/
-	HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);		//Se redirige la señal del Oscilador Interno de Alta Velocidad (HSI) a PA8
+	HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI, RCC_MCODIV_1);		//Se redirige la señal del Oscilador Interno de Alta Velocidad (HSI) a PA8, de forma inicial
 
 }
 
@@ -1067,12 +1121,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 /*
  * HAL_ADC_ConvCpltCallback
  * Callback de la conversión ADC
+ * Usa una variable para seguir las secuencias de los canales convertidos almacenando cada valor donde corresponde
  */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 
 	if(hadc->Instance == ADC1){
 
-		if(adc_secuence == 0){
+		if(adc_secuence == 0){						//Conversión de X
 
 			raw_adc_x = HAL_ADC_GetValue(hadc);
 
@@ -1080,7 +1135,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 
 		}
 
-		else{
+		else{										//Conversión de Y
 
 			raw_adc_y = HAL_ADC_GetValue(hadc);
 
