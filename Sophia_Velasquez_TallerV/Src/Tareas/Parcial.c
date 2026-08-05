@@ -66,7 +66,7 @@
  *
  * En paralelo, el TIM11 genera por interrupción un parpadeo permanente de
  * seguridad en el pin PH1 cada 250 ms como muestra del funcionamiento
- * correcto de todo el sistema.
+ * correcto del sistema completo.
  *
  *
  */
@@ -110,7 +110,7 @@ RTC_HandleTypeDef hrtc;					//RTC handle debe ser global para que stm32f4xx_it.c
 #define LCD_DATO     1
 
 /*Contraseña o firma para la inicialización del RTC*/
-#define RTC_BACKUP_PSW  1111		//Debe cambiarse para volver a configurar los valores del RTC sin quitar la alimentación externa
+#define RTC_BACKUP_PSW  2106		//Debe cambiarse para volver a configurar los valores del RTC sin quitar la alimentación externa
 
 
 /*Variables*/
@@ -180,8 +180,10 @@ FSM_STATE estado_actual = STATE_IDLE;
 static void SystemClock_Config(void);
 static void gpio_Init(void);
 static void tim11_led_ok_Init(void);
+
 static void adc_Init(void);
 static uint8_t adc_process(void);
+
 static void i2c1_display_Init(void);
 static void LCD_SendNibble(uint8_t nibble, uint8_t rs);
 static void LCD_SendCommand(uint8_t comando);
@@ -189,11 +191,14 @@ static void LCD_Init(void);
 static void LCD_SetCursor(uint8_t fila, uint8_t columna);
 static void LCD_Print(char *texto);
 static void LCD_Refresh(void);
+
 static void usart2_Init(void);
 static void command_process(void);
+
 static void rtc_Init(void);
 static void rtc_Initial_Setting(void);
 static uint8_t rtc_process(void);
+
 static void update_data(void);
 static void mco1_Init(void);
 
@@ -719,7 +724,7 @@ static void LCD_SetCursor(uint8_t fila, uint8_t columna){
 
 	}
 
-	/*Envío de al dirección con el comando Set DDRAM address*/
+	/*Envío de la dirección con el comando Set DDRAM address*/
 	LCD_SendCommand(0x80 | direccion);		//0x80 = 10000000
 
 }
@@ -727,7 +732,7 @@ static void LCD_SetCursor(uint8_t fila, uint8_t columna){
 
 /*
  * LCD_Print
- * Escribe una cadena de texto completa a partir de la posicion actual del cursor,
+ * Escribe una cadena de texto completa a partir de la posicion actual del cursor
  * Envía cada caracter con LCD_SendData()
  */
 static void LCD_Print(char *texto){
@@ -913,8 +918,8 @@ static void rtc_Initial_Setting(void){
 	if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != RTC_BACKUP_PSW){		//Si la contraseña es la misma sigue contando normalmente, de lo contrario se inicializa nuevamente
 
 		/*Configuración inicial de la hora, se usa como referencia*/
-		RTC_Time.Hours   = 19;
-		RTC_Time.Minutes = 0;
+		RTC_Time.Hours   = 13;
+		RTC_Time.Minutes = 50;
 		RTC_Time.Seconds = 0;
 
 		/*Cargando la configuración en los registros FSR del MCU*/
@@ -1021,13 +1026,14 @@ static uint8_t rtc_process(void){
 /*
  * update_data
  * Toma los 4 buffers de linea armados en el main, actualiza el display y el mensaje de comincación serial
+ * Calcula los valores del ADC según el formato seleccionado
  */
 static void update_data(void){
 
 	char valor_x[16];
 	char valor_y[16];
 
-	if(joystick_formato == 0){		//FOrmato en V
+	if(joystick_formato == 0){		//Formato en V
 
 		float v_x = ((3.3f / 4095.0f) * (float) raw_adc_x);		//Conversión del valor raw adc de X en un valor de V
 		float v_y = ((3.3f / 4095.0f) * (float) raw_adc_y);		//Conversión del valor raw adc de Y en un valor de V
@@ -1043,7 +1049,7 @@ static void update_data(void){
 	else{
 
 		float norm_x = ((float) raw_adc_x - 2048.0f) / 2048.0f;		//Conversión del valor raw adc de X normalizado
-		float norm_y = ((float) raw_adc_y - 2048.0f) / 2048.0f;		//Conversión del valor raw adc de Y normalizado
+		float norm_y = (2048.0f - (float) raw_adc_y) / 2048.0f;		//Conversión del valor raw adc de Y normalizado
 
 		/*Reescribiendo los valores con dos decimales*/
 		sprintf(valor_x,"%.2f", norm_x);
