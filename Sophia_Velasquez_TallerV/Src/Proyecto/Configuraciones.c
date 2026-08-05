@@ -119,7 +119,7 @@ void tim2_encoder_Init(void){
 
 	/*Configuración general de los pines: PA4 (Interrupción EXTI por Flanco de Bajada)*/
 	GPIO_Init_encoder_sw.Pin  = GPIO_PIN_4;
-	GPIO_Init_encoder_sw.Mode = GPIO_MODE_IT_FALLING;			//Establece el en modo de entrada
+	GPIO_Init_encoder_sw.Mode = GPIO_MODE_IT_FALLING;		//Establece el en modo de entrada
 	GPIO_Init_encoder_sw.Pull = GPIO_PULLUP;				//Activa resistencia Pull-Up (0 lógico al presionar y 1 cuando no)
 
 	/*Cargar la configuracion en los registros FSR del MCU */
@@ -172,10 +172,10 @@ void tim2_encoder_Init(void){
 /*
  * init_TIM3
  * Timer para el PWM del servo
+ * PA6 -> AF2 (TIM3_CH1)
  */
 void tim3_servo_Init(void){
 
-    //PA6 ----> AF2 (TIM3_CH1)
 	/*Inicialización de estructuras*/
 	GPIO_InitTypeDef GPIO_Init_servo = {0};
 
@@ -187,8 +187,8 @@ void tim3_servo_Init(void){
 
     /*Configuración del pin PA6*/
     GPIO_Init_servo.Pin 	  = GPIO_PIN_6;
-    GPIO_Init_servo.Mode 	  = GPIO_MODE_AF_PP;					//Establece el pin en modo salida Push-Pull
-    GPIO_Init_servo.Pull 	  = GPIO_NOPULL;						//Desactiva resistencias de Pull-Up o Pull-Down
+    GPIO_Init_servo.Mode 	  = GPIO_MODE_AF_PP;				//Establece el pin en modo salida Push-Pull
+    GPIO_Init_servo.Pull 	  = GPIO_NOPULL;					//Desactiva resistencias de Pull-Up o Pull-Down
     GPIO_Init_servo.Speed 	  = GPIO_SPEED_FREQ_VERY_HIGH;		//Configuración de velocidad como muy alta
     GPIO_Init_servo.Alternate = GPIO_AF2_TIM3;					//Función alternativa correspondiente a AF2 en TIM3
 
@@ -302,7 +302,7 @@ void usart2_Init(void){
 	HAL_NVIC_EnableIRQ(USART2_IRQn);
 
 	/*Habilitar la interrupción para la recepción de datos*/
-	HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);	//El dato se guarda en la variable rx_data de a byte
+	HAL_UART_Receive_IT(&huart2, (uint8_t *) &rx_data, 1);		//El dato se guarda en la variable rx_data de a byte
 
 }
 

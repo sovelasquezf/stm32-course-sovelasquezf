@@ -9,8 +9,8 @@
 
 #define SERVO_TIMER_CHANNEL  TIM_CHANNEL_1
 
-#define SERVO_MIN_PULSE    1000		//Ancho de pulso para 0° (1 ms)
-#define SERVO_MAX_PULSE    2000  	//Ancho de pulso para 180° (2 ms)
+#define SERVO_MIN_PULSE    850		//Ancho de pulso para 0° (0.9 ms)
+#define SERVO_MAX_PULSE    2350  	//Ancho de pulso para 180° (2.1 ms)
 
 #define SERVO_NUM_SECTORES  5
 
@@ -56,9 +56,9 @@ void SERVO_SetSector(uint8_t sector){
 
     }
 
-    uint16_t rango = SERVO_MAX_PULSE - SERVO_MIN_PULSE;		//2000 us - 1000 us = 1000 us
+    uint16_t rango = SERVO_MAX_PULSE - SERVO_MIN_PULSE;		//2350 us - 850 us = 1500 us
 
-	uint16_t ancho_sector = rango / SERVO_NUM_SECTORES;		//1000 us / 5 = 200 us
+	uint16_t ancho_sector = rango / SERVO_NUM_SECTORES;		//1500 us / 5 = 300 us
 
 	uint16_t inicio_sector = sector * ancho_sector;
 

@@ -31,6 +31,7 @@ ColorRGB8_t COLOR_Norm_RAW(uint16_t raw_r, uint16_t raw_g, uint16_t raw_b, uint1
     if(raw_c == 0){
 
         rgb.r = 0; rgb.g = 0; rgb.b = 0;
+
         return rgb;
 
     }

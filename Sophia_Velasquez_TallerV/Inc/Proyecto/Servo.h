@@ -12,8 +12,8 @@
 extern TIM_HandleTypeDef htim3;
 
 
-#define SERVO_MIN_PULSE    1000  // Ancho de pulso para 0° (1 ms)
-#define SERVO_MAX_PULSE    2000  // Ancho de pulso para 180° (2 ms)
+#define SERVO_MIN_PULSE    850  // Ancho de pulso para 0° (1 ms)
+#define SERVO_MAX_PULSE    2350  // Ancho de pulso para 180° (2 ms)
 
 void SERVO_Init(void);
 void SERVO_SetSector(uint8_t sector);

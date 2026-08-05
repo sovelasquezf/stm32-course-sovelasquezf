@@ -84,7 +84,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
         uint32_t tiempo_actual = HAL_GetTick();
 
         /*Filtro antirrebote: Ignora pulsaciones con menos de 200 ms de diferencia*/
-
         if(tiempo_actual - last_time_bounce > 200){
 
             boton_flag = 1;

@@ -56,14 +56,15 @@ int main(void) {
     ENCODER_Init();
     SERVO_Init();
 
-    for (uint8_t i = 0; i < 5; i++) {
-            SERVO_SetSector(i);
-            HAL_Delay(500); // Espera 500 ms en cada sector
-        }
+    for(uint8_t i = 0; i < 5; i++){
 
-        // Regresa al centro (Sector 2 - 90°)
-        SERVO_SetSector(2);
-        HAL_Delay(500);
+		SERVO_SetSector(i);
+		HAL_Delay(500); // Espera 500 ms en cada sector
+
+	}
+
+	SERVO_SetSector(2);		//Regresa al centro (Sector 2 - 90°)
+	HAL_Delay(500);
 
     /*Comienzo de recepción y transmisión de mensaje inicial*/
     HAL_UART_Receive_IT(&huart2, (uint8_t *)&rx_data, 1);
@@ -204,7 +205,7 @@ int main(void) {
 
 			HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, strlen(uart_buf), 200);
 
-			HAL_Delay(1500);		//Pausa antes de retornar a estado de espera
+			HAL_Delay(2000);		//Pausa antes de retornar a estado de espera
 
 			refrescar_pantalla = 1;
 			estado_actual = ESTADO_ESPERA;
